@@ -102,6 +102,8 @@ print()
 
 
 def get_mtf_signal(candles, timeframes, percent_to_min=5, percent_to_max=5):
+    signals = {}
+
     # Get the OHLCV data for the 1-minute timeframe
     data = np.array([[c['open'], c['high'], c['low'], c['close'], c['volume']] for c in candles['1m']], dtype=np.double)
 
@@ -139,41 +141,49 @@ def get_mtf_signal(candles, timeframes, percent_to_min=5, percent_to_max=5):
         momentum_distance_min = 100 * ((min_sine - close) / (max_price - min_price))
         momentum_distance_max = 100 * ((max_sine - close) / (max_price - min_price))
     else:
-        mtf_signal = "neutral"
+        # Calculate the average percentage across all timeframes
+        if signals and len(signals) > 0:
+            avg_percent = sum([signals[tf] for tf in signals]) / len(signals)
+        else:
+            avg_percent = 0.0
+
+        # Calculate the distance between the average percentage and the minimum and maximum percentages
+        dist_to_min = abs(avg_percent - percent_to_min_val)
+        dist_to_max = abs(avg_percent - percent_to_max_val)
+
+        if dist_to_min < dist_to_max:
+            mtf_signal = "bullish"
+        else:
+            mtf_signal = "bearish"
+
         reversal_keypoint = None
         momentum_distance_min = None
         momentum_distance_max = None
 
-    # Calculate the HT sine wave indicator for the specified timeframes
-    signals = {}
+    # Store the percentage distance for each timeframe in the signals dictionary
     for tf in timeframes:
-        if tf == '1m':
-            continue
+        # Get the OHLCV data for the specified timeframe
         tf_data = np.array([[c['open'], c['high'], c['low'], c['close'], c['volume']] for c in candles[tf]], dtype=np.double)
-        tf_sine, tf_leadsine = talib.HT_SINE(tf_data[:, 3])
-        signals[tf] = tf_sine[-1]
 
-        # Print percentages for 5-minute and 3-minute timeframes
-        if tf == '5m':
-            tf_norm_sine = (tf_sine - min_price) / (max_price - min_price)
-            tf_min_sine = np.nanmin(tf_norm_sine)
-            tf_max_sine = np.nanmax(tf_norm_sine)
-            tf_close = tf_data[-1][-2]
-            tf_percent_to_min = (tf_max_sine - tf_norm_sine[-1]) / (tf_max_sine - tf_min_sine) * 100
-            tf_percent_to_max = (tf_norm_sine[-1] - tf_min_sine) / (tf_max_sine - tf_min_sine) * 100
-            print(f"5-minute close on sine is {tf_percent_to_min:.2f}% away from the minimum value")
-            print(f"5-minute close on sine is {tf_percent_to_max:.2f}% away from the maximum value")
-            print()
-        elif tf == '3m':
-            tf_norm_sine = (tf_sine - min_price) / (max_price - min_price)
-            tf_min_sine = np.nanmin(tf_norm_sine)
-            tf_max_sine = np.nanmax(tf_norm_sine)
-            tf_close = tf_data[-1][-2]
-            tf_percent_to_min = (tf_max_sine - tf_norm_sine[-1]) / (tf_max_sine - tf_min_sine) * 100
-            tf_percent_to_max = (tf_norm_sine[-1] - tf_min_sine) / (tf_max_sine - tf_min_sine) * 100
-            print(f"3-minute close on sine is {tf_percent_to_min:.2f}% away from the minimum value")
-            print(f"3-minute close on sine is {tf_percent_to_max:.2f}% away from the maximum value")
-            print()
+        # Get the HT sine wave indicator for the specified timeframe
+        tf_sine, tf_leadsine = talib.HT_SINE(tf_data[:, 3])
+
+        # Normalize the HT sine wave indicator to the minimum and maximum prices in the market data
+        tf_min_price = np.nanmin(tf_data[:, 3])
+        tf_max_price = np.nanmax(tf_data[:, 3])
+        tf_norm_sine = (tf_sine - tf_min_price) / (tf_max_price - tf_min_price)
+
+        # Get the minimum and maximum values of the normalized HT Sine Wave indicator
+        tf_min_sine = np.nanmin(tf_norm_sine)
+        tf_max_sine = np.nanmax(tf_norm_sine)
+
+        # Calculate the percentage distance from the current close on the sine wave to the minimum and maximum values of the normalized HT Sine Wave indicator
+        tf_close = tf_data[-1][-2]
+        tf_percent_to_min = (tf_max_sine - tf_norm_sine[-1]) / (tf_max_sine - tf_min_sine) * 100
+        tf_percent_to_max = (tf_norm_sine[-1] - tf_min_sine) / (tf_max_sine - tf_min_sine) * 100
+
+        # Store the percentage distance in the signals dictionary
+        signals[tf] = tf_percent_to_min if mtf_signal == "bullish" else tf_percent_to_max
 
     return signals, mtf_signal
 
@@ -194,6 +204,7 @@ print("MTF buy/sell signal:", mtf_signal)
 print()
 
 def check_mtf_signal(candles, timeframes, mtf_signal):
+    signal = "No Signal"
     # Get the OHLCV data for the 1-minute timeframe
     data = np.array([[c['open'], c['high'], c['low'], c['close'], c['volume']] for c in candles['1m']], dtype=np.double)
 
@@ -264,8 +275,11 @@ def check_mtf_signal(candles, timeframes, mtf_signal):
     elif mtf_signal == "bullish" and norm_sine[-1] <= reversal_keypoint:
         signal = "Buy"
     else:
-        signal = "Hold"
-
+        if percent_to_min > 80:
+            signal = "Momentum Bearish"
+        elif percent_to_max > 80:
+            signal = "Momentum Bullish"
+    
     print()
     return signal, momentum_distance_min, momentum_distance_max, momentum_range, cycle_time_str, remaining_time, percent_to_min, percent_to_max
 
