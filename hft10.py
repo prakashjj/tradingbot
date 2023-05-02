@@ -311,10 +311,6 @@ forecast = forecast_price(candles, timeframes, mtf_signal)
 print(forecast)
 print()
 
-import numpy as np
-import talib
-import datetime
-
 def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     signals = {}
 
