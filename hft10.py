@@ -311,6 +311,10 @@ forecast = forecast_price(candles, timeframes, mtf_signal)
 print(forecast)
 print()
 
+import numpy as np
+import talib
+import datetime
+
 def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     signals = {}
 
@@ -333,6 +337,10 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     close = data[-1][-2]
     percent_to_min_val = (max_sine - norm_sine[-1]) / (max_sine - min_sine) * 100
     percent_to_max_val = (norm_sine[-1] - min_sine) / (max_sine - min_sine) * 100
+
+    # Calculate natural phi and pi constants
+    phi = (1 + np.sqrt(5)) / 2
+    pi = np.pi
 
     for timeframe in timeframes:
         # Get the OHLCV data for the given timeframe
@@ -360,8 +368,10 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
         # values of the normalized HT Sine Wave indicator, and the given percentage thresholds
         min_mtf = np.nanmin(ohlc_data[:, 3])
         max_mtf = np.nanmax(ohlc_data[:, 3])
-        min_threshold = close - (close - min_mtf) * percent_to_min / 100
-        max_threshold = close + (max_mtf - close) * percent_to_max / 100
+        percent_to_min_custom = percent_to_min / 100
+        percent_to_max_custom = percent_to_max / 100
+        min_threshold = min_mtf + (max_mtf - min_mtf) * percent_to_min_custom
+        max_threshold = max_mtf - (max_mtf - min_mtf) * percent_to_max_custom
         filtered_close = np.where(ohlc_data[:, 3] < min_threshold, min_threshold, ohlc_data[:, 3])
         filtered_close = np.where(filtered_close > max_threshold, max_threshold, filtered_close)
         avg_mtf = np.nanmean(filtered_close)
@@ -369,19 +379,15 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
         # Store the signals for the given timeframe
         signals[timeframe] = {'momentum': momentum_signal, 'mtf_average': avg_mtf}
 
-    # Determine market mood based on close price relative to the normalized HT Sine Wave indicator
-    if close > max_sine:
-        mood = 'Bullish'
-        targets = [target for target in filtered_close if target < close]
-    elif close < min_sine:
-        mood = 'Bearish'
-        targets = [target for target in filtered_close if target > close]
-    else:
-        mood = 'Neutral'
-        targets = []
+        current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+
+        # Calculate golden ratio forecast price for next 5, 10, and 15 minutes
+        gr = (phi - 1) * (max_price - min_price) + min_price
+        gr_5 = (phi ** 5 - 1) / (phi ** 4) * (max_price - min_price) + gr
+        gr_10 = (phi ** 10 - 1) / (phi ** 9) * (max_price - min_price) + gr
+        gr_15 = (phi ** 15 - 1) / (phi ** 14) * (max_price - min_price) + gr
 
     # Print the results
-    current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
     print("Current time:", current_time.strftime('%Y-%m-%d %H:%M:%S'))
     print(f"HT Sine Wave Percent to Min: {percent_to_min_val:.2f}%")
     print(f"HT Sine Wave Percent to Max: {percent_to_max_val:.2f}%")
@@ -391,9 +397,9 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     print(f"New MTF Average:")
     for timeframe in timeframes:
         print(f"{timeframe}: {signals[timeframe]['mtf_average']:.2f}")
-    print(f"Market Mood: {mood}")
-    print(f"Targets: {targets}")
-
-    return signals, mood, targets
+    print(f"Golden Ratio Forecast Price for Next 5 Minutes: {gr_5:.2f}")
+    print(f"Golden Ratio Forecast Price for Next 10 Minutes: {gr_10:.2f}")
+    print(f"Golden Ratio Forecast Price for Next 15 Minutes: {gr_15:.2f}")
+    print()
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
