@@ -4,7 +4,8 @@ import numpy as np
 import requests
 import talib
 import json
-from datetime import datetime, timedelta
+import datetime
+from datetime import timedelta
 from decimal import Decimal
 import decimal
 
@@ -370,7 +371,11 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
         # Store the signals for the given timeframe
         signals[timeframe] = {'momentum': momentum_signal, 'mtf_average': avg_mtf}
 
+        current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+
+
     # Print the results
+    print("Current time:", current_time.strftime('%Y-%m-%d %H:%M:%S'))
     print(f"HT Sine Wave Percent to Min: {percent_to_min_val:.2f}%")
     print(f"HT Sine Wave Percent to Max: {percent_to_max_val:.2f}%")
     print(f"Combined Percent to Min: {percent_to_min_combined:.2f}%")
