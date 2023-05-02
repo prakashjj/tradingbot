@@ -377,11 +377,16 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
 
         current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
 
-        # Calculate golden ratio forecast price for next 5, 10, and 15 minutes
-        gr = (phi - 1) * (max_price - min_price) + min_price
-        gr_5 = (phi ** 5 - 1) / (phi ** 4) * (max_price - min_price) + gr
-        gr_10 = (phi ** 10 - 1) / (phi ** 9) * (max_price - min_price) + gr
-        gr_15 = (phi ** 15 - 1) / (phi ** 14) * (max_price - min_price) + gr
+        # Determine whether the close is nearest to the max value of the HT Sine Wave indicator or the max value of the combined percent to min and max values
+        if percent_to_max_val > percent_to_max_combined:
+            # Close is nearest to the max value of the HT Sine Wave indicator
+            gr = (phi - 1) * (max_price - close) + close
+        else:
+            # Close is nearest to the max value of the combined percent to min and max values
+            gr = (phi - 1) * (close - min_price) + close
+        gr_5 = (phi ** 5 - 1) / (phi ** 4) * (gr - close) + close
+        gr_10 = (phi ** 10 - 1) / (phi ** 9) * (gr - close) + close
+        gr_15 = (phi ** 15 - 1) / (phi ** 14) * (gr - close) + close
 
     # Print the results
     print("Current time:", current_time.strftime('%Y-%m-%d %H:%M:%S'))
