@@ -338,6 +338,8 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     phi = (1 + np.sqrt(5)) / 2
     pi = np.pi
 
+    current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
+
     for timeframe in timeframes:
         # Get the OHLCV data for the given timeframe
         ohlc_data = np.array([[c['open'], c['high'], c['low'], c['close'], c['volume']] for c in candles[timeframe]], dtype=np.double)
@@ -375,18 +377,26 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
         # Store the signals for the given timeframe
         signals[timeframe] = {'momentum': momentum_signal, 'mtf_average': avg_mtf}
 
-        current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
-
-        # Determine whether the close is nearest to the max value of the HT Sine Wave indicator or the max value of the combined percent to min and max values
+        # Determine the new growth rates based on the momentum signal and the current close
         if percent_to_max_val > percent_to_max_combined:
             # Close is nearest to the max value of the HT Sine Wave indicator
+            time_range = 30  # the range distance in time from min to max of sine takes 30 minutes
             gr = (phi - 1) * (max_price - close) + close
+            gr_5 = ((phi ** (time_range/5)) - 1) / (phi ** (time_range/5 - 1)) * (gr - close) + close
+            gr_10 = ((phi ** (time_range/10)) - 1) / (phi ** (time_range/10 - 1)) * (gr - close) + close
+            gr_15 = ((phi ** (time_range/15)) - 1) / (phi ** (time_range/15 - 1)) * (gr - close) + close
         else:
             # Close is nearest to the max value of the combined percent to min and max values
+            time_range = 30  # the range distance in time from min to max of sine takes 30 minutes
             gr = (phi - 1) * (close - min_price) + close
-        gr_5 = (phi ** 5 - 1) / (phi ** 4) * (gr - close) + close
-        gr_10 = (phi ** 10 - 1) / (phi ** 9) * (gr - close) + close
-        gr_15 = (phi ** 15 - 1) / (phi ** 14) * (gr - close) + close
+            gr_5 = ((phi ** (time_range/5)) - 1) / (phi ** (time_range/5 - 1)) * (gr - close) + close
+            gr_10 = ((phi ** (time_range/10)) - 1) / (phi ** (time_range/10 - 1)) * (gr - close) + close
+            gr_15 = ((phi ** (time_range/15)) - 1) / (phi ** (time_range/15 - 1)) * (gr - close) + close
+
+        signals[timeframe]['gr'] = gr
+        signals[timeframe]['gr_5'] = gr_5
+        signals[timeframe]['gr_10'] = gr_10
+        signals[timeframe]['gr_15'] = gr_15
 
     # Print the results
     print("Current time:", current_time.strftime('%Y-%m-%d %H:%M:%S'))
@@ -402,5 +412,7 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     print(f"Golden Ratio Forecast Price for Next 10 Minutes: {gr_10:.2f}")
     print(f"Golden Ratio Forecast Price for Next 15 Minutes: {gr_15:.2f}")
     print()
+
+    return signals
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
