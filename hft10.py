@@ -381,6 +381,7 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
         if percent_to_max_val > percent_to_max_combined:
             # Close is nearest to the max value of the HT Sine Wave indicator
             time_range = 30  # the range distance in time from min to max of sine takes 30 minutes
+
             gr = (phi - 1) * (max_price - close) + close
             gr_5 = ((phi ** (time_range/5)) - 1) / (phi ** (time_range/5 - 1)) * (gr - close) + close
             gr_10 = ((phi ** (time_range/10)) - 1) / (phi ** (time_range/10 - 1)) * (gr - close) + close
@@ -388,6 +389,7 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
         else:
             # Close is nearest to the max value of the combined percent to min and max values
             time_range = 30  # the range distance in time from min to max of sine takes 30 minutes
+
             gr = (phi - 1) * (close - min_price) + close
             gr_5 = ((phi ** (time_range/5)) - 1) / (phi ** (time_range/5 - 1)) * (gr - close) + close
             gr_10 = ((phi ** (time_range/10)) - 1) / (phi ** (time_range/10 - 1)) * (gr - close) + close
