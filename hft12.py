@@ -425,6 +425,11 @@ def gmma_swt(candles, periods, wavelet='db2', level=2):
         gmma[i] = filtered
     return gmma
 
+def calculate_ema(candles, period):
+    prices = np.array([float(candle['close']) for candle in candles])
+    ema = talib.EMA(prices, timeperiod=period)
+    return ema
+
 def main():
     # Variables
     global closed_positions
