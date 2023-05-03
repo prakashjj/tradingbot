@@ -404,7 +404,7 @@ get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 def entry_long(symbol):
     try:
         symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
-        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
+        quantity = (bUSD_balance / symbol_price) * leverage
         order = client.futures_create_order(
             symbol=symbol,
             side=Client.SIDE_BUY,
@@ -419,7 +419,7 @@ def entry_long(symbol):
 def entry_short(symbol):
     try:
         symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
-        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
+        quantity = (bUSD_balance / symbol_price) * leverage
         order = client.futures_create_order(
             symbol=symbol,
             side=Client.SIDE_SELL,
