@@ -431,15 +431,22 @@ def entry_short(symbol):
     )
     print(f'Sell order placed: {order}')
 
-def exit_trade():
+def exit_trade(symbol, side):
+    position_size = float(client.futures_position_information(symbol=symbol)[0]['positionAmt'])
+    if position_size > 0 and side == 'long':
+        order_side = 'SELL'
+    elif position_size < 0 and side == 'short':
+        order_side = 'BUY'
+    else:
+        print(f"No {side} position found for {symbol}")
+        return
     order = client.futures_create_order(
         symbol=symbol,
-        side='SELL' if side == 'long' else 'BUY',
+        side=order_side,
         type='MARKET',
-        quantity=abs(float(client.futures_position_information(symbol=symbol)[0]['positionAmt']))
+        quantity=abs(position_size)
     )
-    print(f'Exit order placed: {order}')
-
+    print(f'{side.capitalize()} exit order placed: {order}')
 def main():
     # Variables
     global closed_positions
