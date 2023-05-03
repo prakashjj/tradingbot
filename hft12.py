@@ -587,20 +587,14 @@ def main():
                     trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                     print(f"Exited trade at take profit threshold {int(time.time())}")
 
-                    # Enter a new trade with reversed side
-                    if trade_side == 'long':
-                        entry_short(TRADE_SYMBOL)
-                        trade_side = 'short'
-                    elif trade_side == 'short':
-                        entry_long(TRADE_SYMBOL)
-                        trade_side = 'long'
-
                     # Reset trade variables
                     trade_open = True
                     trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                     trade_exit_pnl = 0
                     trade_entry_time = int(time.time())
 
+                    restart_script()
+                    
             # Wait for the next candle
             time.sleep(5)
 
