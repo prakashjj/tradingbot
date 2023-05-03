@@ -92,6 +92,7 @@ for interval in timeframes:
 
 print()
 
+
 # Create close prices array for each time frame
 close_prices = {}
 for interval in timeframes:
@@ -102,6 +103,17 @@ for interval in timeframes:
 
 print()
 
+# Global variables
+closed_positions = []
+
+def get_historical_candles(symbol, start_time, end_time, timeframe):
+    candles = client.futures_klines(symbol=symbol, interval=timeframe, startTime=start_time * 1000, endTime=end_time * 1000)
+    candles_by_timeframe = {}
+    for tf in ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '1w']:
+        candles_by_timeframe[tf] = [ {'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles ]
+    return candles_by_timeframe
+
+print()
 
 def get_mtf_signal(candles, timeframes, percent_to_min=5, percent_to_max=5):
     signals = {}
@@ -313,51 +325,50 @@ print()
 
 def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     signals = {}
-
+    
     # Get the OHLCV data for the 1-minute timeframe
-    data = np.array([[c['open'], c['high'], c['low'], c['close'], c['volume']] for c in candles['1m']], dtype=np.double)
-
+    data_1m = np.array([[c['open'], c['high'], c['low'], c['close'], c['volume']] for c in candles['1m']], dtype=np.double)
+    
     # Get the HT sine wave indicator for the 1-minute timeframe
-    sine, leadsine = talib.HT_SINE(data[:, 3])
-
+    sine, leadsine = talib.HT_SINE(data_1m[:, 3])
+    
     # Normalize the HT sine wave indicator to the minimum and maximum prices in the market data
-    min_price = np.nanmin(data[:, 3])
-    max_price = np.nanmax(data[:, 3])
+    min_price = np.nanmin(data_1m[:, 3])
+    max_price = np.nanmax(data_1m[:, 3])
     norm_sine = (sine - min_price) / (max_price - min_price)
-
+    
     # Get the minimum and maximum values of the normalized HT Sine Wave indicator
     min_sine = np.nanmin(norm_sine)
     max_sine = np.nanmax(norm_sine)
-
+    
     # Calculate the percentage distance from the current close on sine to the minimum and maximum values of the normalized HT Sine Wave indicator
-    close = data[-1][-2]
+    close = data_1m[-1][-2]
     percent_to_min_val = (max_sine - norm_sine[-1]) / (max_sine - min_sine) * 100
     percent_to_max_val = (norm_sine[-1] - min_sine) / (max_sine - min_sine) * 100
-
+    
     for timeframe in timeframes:
         # Get the OHLCV data for the given timeframe
         ohlc_data = np.array([[c['open'], c['high'], c['low'], c['close'], c['volume']] for c in candles[timeframe]], dtype=np.double)
-
+        
         # Calculate the momentum signal for the given timeframe
         close_prices = ohlc_data[:, 3]
         momentum = talib.MOM(close_prices, timeperiod=14)
-
+        
         # Calculate the minimum and maximum values for the momentum signal
         min_momentum = np.nanmin(momentum)
         max_momentum = np.nanmax(momentum)
-
+        
         # Calculate the percentage distance from the current momentum to the minimum and maximum values of the momentum signal
         current_momentum = momentum[-1]
         percent_to_min_momentum = (max_momentum - current_momentum) / (max_momentum - min_momentum) * 100
         percent_to_max_momentum = (current_momentum - min_momentum) / (max_momentum - min_momentum) * 100
-
+        
         # Calculate the new momentum signal based on percentages from the MTF signal and the initial momentum signal
         percent_to_min_combined = (percent_to_min_val + percent_to_min_momentum) / 2
         percent_to_max_combined = (percent_to_max_val + percent_to_max_momentum) / 2
         momentum_signal = percent_to_max_combined - percent_to_min_combined
-
-        # Calculate the new average for the MTF signal based on the percentage distance from the current close to the minimum and maximum
-        # values of the normalized HT Sine Wave indicator, and the given percentage thresholds
+        
+        # Calculate the new average for the MTF signal based on the percentage distance from the current close to the minimum and maximu values of the normalized HT Sine Wave indicator, and the given percentage thresholds
         min_mtf = np.nanmin(ohlc_data[:, 3])
         max_mtf = np.nanmax(ohlc_data[:, 3])
         percent_to_min_custom = percent_to_min / 100
@@ -367,24 +378,28 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
         filtered_close = np.where(ohlc_data[:, 3] < min_threshold, min_threshold, ohlc_data[:, 3])
         filtered_close = np.where(filtered_close > max_threshold, max_threshold, filtered_close)
         avg_mtf = np.nanmean(filtered_close)
-
+        
         # Store the signals for the given timeframe
-        signals[timeframe] = {'momentum': momentum_signal, 'mtf_average': avg_mtf}
-
-        current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
-
+        signals[timeframe] = {'momentum': momentum_signal, 'ht_sine_percent_to_min': percent_to_min_val, 'ht_sine_percent_to_max': percent_to_max_val, 'mtf_average': avg_mtf, 'min_threshold': min_threshold, 'max_threshold': max_threshold}
+    
+    current_time = datetime.datetime.utcnow() + datetime.timedelta(hours=3)
 
     # Print the results
     print("Current time:", current_time.strftime('%Y-%m-%d %H:%M:%S'))
     print(f"HT Sine Wave Percent to Min: {percent_to_min_val:.2f}%")
+
     print(f"HT Sine Wave Percent to Max: {percent_to_max_val:.2f}%")
+    print(f"Momentum Percent to Min: {percent_to_min_momentum:.2f}%")
+    print(f"Momentum Percent to Max: {percent_to_max_momentum:.2f}%")
     print(f"Combined Percent to Min: {percent_to_min_combined:.2f}%")
     print(f"Combined Percent to Max: {percent_to_max_combined:.2f}%")
     print(f"New Momentum Signal: {momentum_signal:.2f}")
     print(f"New MTF Average:")
     for timeframe in timeframes:
-        print(f"{timeframe}: {signals[timeframe]['mtf_average']:.2f}")
+        print(f"{timeframe}: {signals[timeframe]['mtf_average']:.2f} (min threshold: {signals[timeframe]['min_threshold']:.2f}, max threshold: {signals[timeframe]['max_threshold']:.2f})")
     print()
+
+    return signals
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 
@@ -418,3 +433,107 @@ def exit_trade():
 print()
 print('Init main(): ')
 print()
+
+def main():
+    # Variables
+    global closed_positions
+    global TRADE_SYMBOL
+    global TRADE_TYPE
+    global TRADE_LVRG
+    global STOP_LOSS_THRESHOLD
+    global TAKE_PROFIT_THRESHOLD
+    global BUY_THRESHOLD
+    global SELL_THRESHOLD
+    global EMA_SLOW_PERIOD
+    global EMA_FAST_PERIOD
+
+    # Define start and end time for historical data
+    start_time = int(time.time()) - (86400 * 30)  # 30 days ago
+    end_time = int(time.time())
+
+    # Initialize variables for tracking trade state
+    trade_open = False
+    trade_side = None
+    trade_entry_pnl = 0
+    trade_exit_pnl = 0
+
+    # Define the candles and timeframes to use for the signals
+    candles = get_historical_candles(TRADE_SYMBOL, start_time, end_time, '1m')
+    timeframes = ['1m', '3m', '5m']
+
+    while True:
+        # Get the MTF signal
+        signals = get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
+        if signals is None:
+            print("Error: signals is None")
+            time.sleep(1)
+            continue
+
+        # Check if the '1m' key exists in the signals dictionary
+        if '1m' in signals:
+            percent_to_min_val = signals['1m']['min_threshold']
+            percent_to_max_val = signals['1m']['max_threshold']
+            
+            # Check if the 'combined_percent_to_min' and 'combined_percent_to_max' keys exist in the dictionary for the '1m' timeframe
+            if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m']:
+                percent_to_min_combined = signals['1m']['combined_percent_to_min']
+                percent_to_max_combined = signals['1m']['combined_percent_to_max']
+            else:
+                percent_to_min_combined = 0.0
+                percent_to_max_combined = 0.0
+            
+            momentum_signal = signals['1m'].get('momentum_signal', 0)
+            mtf_averages = signals['1m'].get('mtf_averages', [])
+
+            # Check if we need to exit the trade due to take profit, stop loss, or sinewave reversal
+            if trade_open:
+                current_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                if (current_pnl < trade_entry_pnl * -0.0113) or (current_pnl > trade_entry_pnl * 0.0336):
+                    exit_trade()
+                    closed_positions.append(position)
+                    trade_open = False
+                    trade_side = None
+                    trade_entry_pnl = 0
+                    trade_exit_pnl = current_pnl
+                    print(f"Trade exited with pnl: {current_pnl:.2f}")
+                else:
+                    time_diff = int(time.time()) - trade_entry_time
+                    if time_diff > 1800:
+                        exit_trade()
+                        closed_positions.append(position)
+                        trade_open = False
+                        trade_side = None
+                        trade_entry_pnl = 0
+                        trade_exit_pnl = current_pnl
+                        print(f"Trade exited after 30 minutes with pnl: {current_pnl:.2f}")
+
+            # Check if we need to enter a new trade
+            if (percent_to_min_val <= percent_to_max_val) and \
+               (percent_to_min_combined <= percent_to_max_combined) and \
+               (percent_to_min_val <= 15) and \
+               any(avg > candles[-1]['close'] for avg in mtf_averages):
+                if momentum_signal > BUY_THRESHOLD:
+                    # Enter long trade
+                    entry_long(TRADE_SIZE, TRADE_SYMBOL)
+                    trade_open = True
+                    trade_side = 'long'
+                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                    trade_entry_time = int(time.time())
+                    print("Reversal at min of sine triggered, init long")
+                elif momentum_signal < -SELL_THRESHOLD:
+                    # Enter short trade
+                    entry_short(TRADE_SIZE, TRADE_SYMBOL)
+                    trade_open = True
+                    trade_side = 'short'
+                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                    trade_entry_time = int(time.time())
+                    print("Reversal at max of sine triggered, init short")
+        
+        time.sleep(5)
+
+# Run the main function
+if __name__ == '__main__':
+    main()
+
+
+
