@@ -107,7 +107,7 @@ closed_positions = []
 def get_historical_candles(symbol, start_time, end_time, timeframe):
     candles = client.futures_klines(symbol=symbol, interval=timeframe, startTime=start_time * 1000, endTime=end_time * 1000)
     candles_by_timeframe = {}
-    for tf in ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '1w']:
+    for tf in ['1m', '3m', '5m']:
         candles_by_timeframe[tf] = [ {'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles ]
     return candles_by_timeframe
 
@@ -400,6 +400,33 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 
+def entry_long(quantity, symbol):
+    order = client.futures_create_order(
+        symbol=symbol,
+        side='BUY',
+        type='MARKET',
+        quantity=quantity
+    )
+    print(f'Long entry order placed: {order}')
+
+def entry_short(quantity, symbol):
+    order = client.futures_create_order(
+        symbol=symbol,
+        side='SELL',
+        type='MARKET',
+        quantity=quantity
+    )
+    print(f'Short entry order placed: {order}')
+
+def exit_trade():
+    order = client.futures_create_order(
+        symbol=symbol,
+        side='SELL' if side == 'long' else 'BUY',
+        type='MARKET',
+        quantity=abs(float(client.futures_position_information(symbol=symbol)[0]['positionAmt']))
+    )
+    print(f'Exit order placed: {order}')
+
 def main():
     # Variables
     global closed_positions
@@ -459,13 +486,19 @@ def main():
                     if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
                         # Place a long trade
                         if not trade_open:
-                            entry_long(TRADE_SYMBOL)
+                            # Calculate the quantity to trade based on account balance and leverage
+                            quantity = calculate_quantity(account_balance, TRADE_LVRG, candles[-1]['close'])
+
+                            # Place the order
+                            order_id, order_price = place_order(TRADE_SYMBOL, TRADE_TYPE, quantity, candles[-1]['close'])
+
+                            # Track trade state
                             trade_open = True
                             trade_side = 'long'
                             trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                             trade_exit_pnl = 0
                             trade_entry_time = int(time.time())
-                            print(f"Entered long trade at {trade_entry_time}")
+                            print(f"Entered long trade at {trade_entry_time} with quantity {quantity} at price {order_price}")
                         else:
                             print("Trade already open.")
 
@@ -473,31 +506,41 @@ def main():
                     elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val < 25 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
                         # Place a short trade
                         if not trade_open:
-                            entry_short(TRADE_SYMBOL)
+                            # Calculate the quantity to trade based on account balance and leverage
+                            quantity = calculate_quantity(account_balance, TRADE_LVRG, candles[-1]['close'])
+
+                            # Place the order
+                            order_id, order_price = place_order(TRADE_SYMBOL, TRADE_TYPE, -quantity, candles[-1]['close'])
+
+                            # Track trade state
                             trade_open = True
                             trade_side = 'short'
                             trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                             trade_exit_pnl = 0
                             trade_entry_time = int(time.time())
-                            print(f"Entered short trade at {trade_entry_time}")
+                            print(f"Entered short trade at {trade_entry_time} with quantity {quantity} at price {order_price}")
                         else:
                             print("Trade already open.")
 
                     # Check if the trade has exceeded the stop loss threshold
                     if trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
                         # Exit the trade
-                        exit_trade()
+                        exit_order_id, exit_order_price = exit_trade()
+
+                        # Track trade state
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        print(f"Exited trade at stop loss threshold {int(time.time())}")
+                        print(f"Exited trade at stop loss threshold {int(time.time())} with exit order id {exit_order_id} at price {exit_order_price}")
 
                     # Check if the trade has exceeded the take profit threshold
                     elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
                         # Exit the trade
-                        exit_trade()
+                        exit_order_id, exit_order_price = exit_trade()
+
+                        # Track trade state
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        print(f"Exited trade at take profit threshold {int(time.time())}")
+                        print(f"Exited trade at take profit threshold {int(time.time())} with exit order id {exit_order_id} at price {exit_order_price}")
 
                     # Print the signal values for debugging purposes
                     print(f"HT Sine Wave Percent to Min: {percent_to_min_val}, HT Sine Wave Percent to Max: {percent_to_max_val}, Momentum Percent to Min: {percent_to_min_momentum}, Momentum Percent to Max: {percent_to_max_momentum}")
