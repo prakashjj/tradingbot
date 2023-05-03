@@ -45,8 +45,8 @@ TRADE_SIZE = bUSD_balance * 20
 TRADE_SYMBOL = "BTCBUSD"
 TRADE_TYPE = "MARKET"
 TRADE_LVRG = 20
-STOP_LOSS_THRESHOLD = 0.0112  # 1.67% stop loss threshold
-TAKE_PROFIT_THRESHOLD = 0.0336 # 3.73% take profit threshold
+STOP_LOSS_THRESHOLD = 0.0112  # 1.12% stop loss threshold
+TAKE_PROFIT_THRESHOLD = 0.0336 # 3.36% take profit threshold
 BUY_THRESHOLD = 2.0
 SELL_THRESHOLD = 2.0
 EMA_SLOW_PERIOD = 57
@@ -422,13 +422,57 @@ def entry_short(quantity, symbol):
     print(f'Short entry order placed: {order}')
 
 def exit_trade():
+    global TRADE_SYMBOL
+    global TRADE_TYPE
+    global TRADE_LVRG
+    global closed_positions
+
+    # Get the current position information
+    position_info = client.futures_position_information(symbol=TRADE_SYMBOL)
+
+    # Check if the position is long or short
+    if float(position_info[0]['positionAmt']) > 0:
+        side = 'long'
+    elif float(position_info[0]['positionAmt']) < 0:
+        side = 'short'
+    else:
+        # Position is flat, nothing to exit
+        return
+
+    # Close the position
     order = client.futures_create_order(
-        symbol=symbol,
-        side='SELL' if side == 'long' else 'BUY',
+        symbol=TRADE_SYMBOL,
+        side=OPPOSITE_SIDE[side],
         type='MARKET',
-        quantity=abs(float(client.futures_position_information(symbol=symbol)[0]['positionAmt']))
+        quantity=abs(float(position_info[0]['positionAmt'])),
+        recvWindow=10000
     )
-    print(f'Exit order placed: {order}')
+
+    # Add the closed position to the closed_positions list
+    closed_positions.append({
+        'symbol': TRADE_SYMBOL,
+        'type': TRADE_TYPE,
+        'side': side,
+        'entry_time': int(position_info[0]['time']),
+        'entry_price': float(position_info[0]['entryPrice']),
+        'exit_time': int(time.time()),
+        'exit_price': float(order['avgPrice']),
+        'quantity': abs(float(position_info[0]['positionAmt'])),
+        'profit_loss': float(order['cumQuoteQty']) - float(position_info[0]['positionInitialMargin']),
+        'stop_loss_threshold': STOP_LOSS_THRESHOLD,
+        'take_profit_threshold': TAKE_PROFIT_THRESHOLD
+    })
+
+    # Print confirmation of the closed position
+    print(f"Closed {side} position at {order['avgPrice']}")
+
+    # Check if the stop loss was triggered
+    if abs(float(position_info[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
+        # Enter a new trade with the opposite side
+        if side == 'long':
+            enter_trade('short')
+        else:
+            enter_trade('long')
 
 print()
 print('Init main(): ')
@@ -456,6 +500,12 @@ def main():
 
     while True:
         try:
+            # Check if balance is zero
+            account_balance = float(client.futures_account_balance()[0]['balance'])
+            if account_balance == 0:
+                print("Balance is zero. Exiting program.")
+                break
+
             # Define start and end time for historical data
             start_time = int(time.time()) - (1800 * 4)  # 60-minute interval (4 candles)
             end_time = int(time.time())
