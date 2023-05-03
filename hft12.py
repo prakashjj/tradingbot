@@ -456,7 +456,7 @@ def main():
                     ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
 
                     # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
-                    if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
+                    if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
                         # Place a long trade
                         if not trade_open:
                             entry_long(TRADE_SYMBOL)
@@ -470,7 +470,7 @@ def main():
                             print("Trade already open.")
 
                     # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
-                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_min_val > 90 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
+                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val < 25 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
                         # Place a short trade
                         if not trade_open:
                             entry_short(TRADE_SYMBOL)
