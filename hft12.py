@@ -479,6 +479,10 @@ def exit_trade(symbol, side):
     )
     print(f'{side.capitalize()} exit order placed: {order}')
 
+print()
+print('Init main(): ')
+print()
+
 def main():
     # Variables
     global closed_positions
