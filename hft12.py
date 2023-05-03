@@ -40,7 +40,7 @@ TRADE_SIZE = bUSD_balance * 20
 # Global variables
 TRADE_SYMBOL = 'BTCUSDT'
 TRADE_TYPE = 'LONG'
-TRADE_LVRG = 20
+TRADE_LVRG = 10
 STOP_LOSS_THRESHOLD = 0.0112 # define 1.12% for stoploss
 TAKE_PROFIT_THRESHOLD = 0.0336 # define 3.36% for stoploss
 BUY_THRESHOLD = -10
@@ -400,23 +400,36 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 
-def entry_long(quantity, symbol):
+def entry_long(symbol):
+    # Get your BUSD balance
+    balance = client.futures_account_balance(asset='BUSD')['balance']
+    # Calculate the quantity to buy
+    price = client.futures_symbol_ticker(symbol=symbol)['price']
+    quantity = int(float(balance) * 20 / float(price))
+    # Place the buy order
     order = client.futures_create_order(
         symbol=symbol,
         side='BUY',
         type='MARKET',
         quantity=quantity
     )
-    print(f'Long entry order placed: {order}')
+    print(f'Buy order placed: {order}')
 
-def entry_short(quantity, symbol):
+def entry_short(symbol):
+    # Get your position size
+    position_size = client.futures_position_information(symbol=symbol)[0]['positionAmt']
+    # Get the current price
+    price = client.futures_symbol_ticker(symbol=symbol)['price']
+    # Calculate the quantity to sell
+    quantity = int(float(position_size) * 20)
+    # Place the sell order
     order = client.futures_create_order(
         symbol=symbol,
         side='SELL',
         type='MARKET',
         quantity=quantity
     )
-    print(f'Short entry order placed: {order}')
+    print(f'Sell order placed: {order}')
 
 def exit_trade():
     order = client.futures_create_order(
