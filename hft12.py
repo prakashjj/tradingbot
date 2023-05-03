@@ -532,7 +532,7 @@ def main():
                     percent_to_max_momentum = signals['1m']['momentum_percent_to_max']
 
                     # Check if the HT Sine Wave Percent to Min is below the threshold for a long trade
-                    if percent_to_min_val < 15 and percent_to_min_combined < percent_to_max_combined and percent_to_min_momentum > 0:
+                    if percent_to_min_val < 15 and percent_to_min_combined < percent_to_max_combined:
                         enter_trade('long')
                         trade_open = True
                         trade_side = 'long'
@@ -542,7 +542,7 @@ def main():
                         print(f"Entered long trade at {trade_entry_time}")
                     
                     # Check if the HT Sine Wave Percent to Max is below the threshold for a short trade
-                    elif percent_to_max_val < 15 and percent_to_max_combined < percent_to_min_combined and percent_to_max_momentum < 0:
+                    elif percent_to_max_val < 15 and percent_to_max_combined < percent_to_min_combined:
                         enter_trade('short')
                         trade_open = True
                         trade_side = 'short'
@@ -582,4 +582,3 @@ def main():
 # Run the main function
 if __name__ == '__main__':
     main()
-
