@@ -533,7 +533,7 @@ def main():
 
                     # Check if the HT Sine Wave Percent to Min is below the threshold for a long trade
                     if percent_to_min_val < 15 and percent_to_min_combined < percent_to_max_combined:
-                        enter_trade('long')
+                        entry_long(TRADE_LVRG, TRADE_SYMBOL)
                         trade_open = True
                         trade_side = 'long'
                         trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
@@ -543,7 +543,7 @@ def main():
                     
                     # Check if the HT Sine Wave Percent to Max is below the threshold for a short trade
                     elif percent_to_max_val < 15 and percent_to_max_combined < percent_to_min_combined:
-                        enter_trade('short')
+                        entry_short(TRADE_LVRG, TRADE_SYMBOL)
                         trade_open = True
                         trade_side = 'short'
                         trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
