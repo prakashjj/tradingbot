@@ -40,7 +40,7 @@ TRADE_SIZE = bUSD_balance * 20
 # Global variables
 TRADE_SYMBOL = 'BTCUSDT'
 TRADE_TYPE = 'LONG'
-TRADE_LVRG = 10
+TRADE_LVRG = 20
 STOP_LOSS_THRESHOLD = 0.0112 # define 1.12% for stoploss
 TAKE_PROFIT_THRESHOLD = 0.0336 # define 3.36% for stoploss
 BUY_THRESHOLD = -10
