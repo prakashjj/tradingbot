@@ -402,22 +402,40 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 
-def entry_long(quantity, symbol):
+def entry_long(symbol):
+    # Get the BUSD balance of the account
+    account_balance = float(get_account_balance('BUSD'))
+
+    # Calculate the quantity of the trade as the entire BUSD balance
+    quantity = int(account_balance / float(get_symbol_price(symbol)))
+
+    # Place the buy order
     order = client.futures_create_order(
         symbol=symbol,
         side='BUY',
         type='MARKET',
         quantity=quantity
     )
+
+    # Print the order confirmation
     print(f'Long entry order placed: {order}')
 
-def entry_short(quantity, symbol):
+def entry_short(symbol):
+    # Get the BUSD balance of the account
+    account_balance = float(get_account_balance('BUSD'))
+
+    # Calculate the quantity of the trade as the entire BUSD balance
+    quantity = int(account_balance / float(get_symbol_price(symbol)))
+
+    # Place the sell order
     order = client.futures_create_order(
         symbol=symbol,
         side='SELL',
         type='MARKET',
         quantity=quantity
     )
+
+    # Print the order confirmation
     print(f'Short entry order placed: {order}')
 
 def exit_trade():
@@ -468,10 +486,10 @@ def exit_trade():
     # Check if the stop loss was triggered
     if abs(float(position_info[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
         # Enter a new trade with the opposite side
-        if side == 'long':
-            enter_trade('short')
+        if TRADE_TYPE == 'LONG':
+            entry_short(TRADE_SYMBOL)
         else:
-            enter_trade('long')
+            entry_long(TRADE_SYMBOL)
 
 print()
 print('Init main(): ')
@@ -533,7 +551,7 @@ def main():
 
                     # Check if the HT Sine Wave Percent to Min is below the threshold for a long trade
                     if percent_to_min_val < 15 and percent_to_min_combined < percent_to_max_combined:
-                        entry_long(TRADE_LVRG, TRADE_SYMBOL)
+                        entry_long('long')
                         trade_open = True
                         trade_side = 'long'
                         trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
@@ -543,7 +561,7 @@ def main():
                     
                     # Check if the HT Sine Wave Percent to Max is below the threshold for a short trade
                     elif percent_to_max_val < 15 and percent_to_max_combined < percent_to_min_combined:
-                        entry_short(TRADE_LVRG, TRADE_SYMBOL)
+                        entry_short('short')
                         trade_open = True
                         trade_side = 'short'
                         trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
