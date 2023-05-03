@@ -8,7 +8,6 @@ import datetime
 from datetime import timedelta
 from decimal import Decimal
 import decimal
-import pywt
 
 # binance module imports
 from binance.client import Client as BinanceClient
@@ -41,15 +40,16 @@ TRADE_SIZE = bUSD_balance * 20
 # Global variables
 TRADE_SYMBOL = 'BTCUSDT'
 TRADE_TYPE = 'LONG'
-TRADE_LVRG = 10
+TRADE_LVRG = 20
 STOP_LOSS_THRESHOLD = 0.0112 # define 1.12% for stoploss
 TAKE_PROFIT_THRESHOLD = 0.0336 # define 3.36% for stoploss
 BUY_THRESHOLD = -10
 SELL_THRESHOLD = 10
-EMA_SLOW_PERIOD = 50
-EMA_FAST_PERIOD = 20
+EMA_SLOW_PERIOD = 56
+EMA_FAST_PERIOD = 12
 closed_positions = []
 OPPOSITE_SIDE = {'long': 'SELL', 'short': 'BUY'}
+trade_percentage = 1.0 # 100% of your account balance
 
 print()
 
@@ -104,6 +104,13 @@ print()
 
 # Global variables
 closed_positions = []
+
+def get_historical_candles(symbol, start_time, end_time, timeframe):
+    candles = client.futures_klines(symbol=symbol, interval=timeframe, startTime=start_time * 1000, endTime=end_time * 1000)
+    candles_by_timeframe = {}
+    for tf in ['1m', '3m', '5m']:
+        candles_by_timeframe[tf] = [ {'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles ]
+    return candles_by_timeframe
 
 print()
 
@@ -394,94 +401,54 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 
-def get_historical_candles(symbol, start_time, end_time, timeframe):
-    candles = client.futures_klines(symbol=symbol, interval=timeframe, startTime=start_time * 1000, endTime=end_time * 1000)
-    candles_by_timeframe = {}
-    for tf in ['1m', '3m', '5m']:
-        tf_candles = [{'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles if candle[6] == tf]
-        candles_by_timeframe[tf] = tf_candles
-    return candles_by_timeframe
-
-def gmma_swt(candles, periods, wavelet='db2', level=2):
-    prices = np.array([candle['close'] for candle in candles])
-    medians = []
-    for p in periods:
-        high = np.array([candle['high'] for candle in candles[-p:]])
-        low = np.array([candle['low'] for candle in candles[-p:]])
-        median = (high + low) / 2
-        medians.append(median.mean())
-    gmma = talib.MA(prices, timeperiod=1, matype=1)
-    for i in range(len(prices)):
-        new_medians = []
-        for p in periods:
-            high = candles[-p]['high']
-            low = candles[-p]['low']
-            new_median = (high + low) / 2
-            new_medians.append(new_median)
-        new_medians_avg = np.mean(new_medians)
-        medians.append(new_medians_avg)
-        del medians[0]
-        coeffs = pywt.swt(medians, wavelet, level=level)
-        filtered = coeffs[0][-1]
-        gmma[i] = filtered
-    return gmma
-
-def calculate_ema(candles, period):
-    prices = np.array([float(candle['close']) for candle in candles])
-    ema = talib.EMA(prices, timeperiod=period)
-    return ema
-
 def entry_long(symbol):
-    # Get your BUSD balance
-    balance = client.futures_account_balance(asset='BUSD')['balance']
-    # Calculate the quantity to buy
-    price = client.futures_symbol_ticker(symbol=symbol)['price']
-    quantity = int(float(balance) * 20 / float(price))
-    # Place the buy order
-    order = client.futures_create_order(
-        symbol=symbol,
-        side='BUY',
-        type='MARKET',
-        quantity=quantity
-    )
-    print(f'Buy order placed: {order}')
+    try:
+        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
+        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
+        order = client.futures_create_order(
+            symbol=symbol,
+            side=Client.SIDE_BUY,
+            type=Client.ORDER_TYPE_MARKET,
+            quantity=quantity)
+        print(f"Long order created for {quantity} {symbol} at market price.")
+        return True
+    except BinanceAPIException as e:
+        print(f"Error creating long order: {e}")
+        return False
 
 def entry_short(symbol):
-    # Get your position size
-    position_size = client.futures_position_information(symbol=symbol)[0]['positionAmt']
-    # Get the current price
-    price = client.futures_symbol_ticker(symbol=symbol)['price']
-    # Calculate the quantity to sell
-    quantity = int(float(position_size) * 20)
-    # Place the sell order
+    try:
+        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
+        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
+        order = client.futures_create_order(
+            symbol=symbol,
+            side=Client.SIDE_SELL,
+            type=Client.ORDER_TYPE_MARKET,
+            quantity=quantity)
+        print(f"Short order created for {quantity} {symbol} at market price.")
+        return True
+    except BinanceAPIException as e:
+        print(f"Error creating short order: {e}")
+        return False
+
+def exit_trade():
     order = client.futures_create_order(
         symbol=symbol,
-        side='SELL',
+        side='SELL' if side == 'long' else 'BUY',
         type='MARKET',
-        quantity=quantity
+        quantity=abs(float(client.futures_position_information(symbol=symbol)[0]['positionAmt']))
     )
-    print(f'Sell order placed: {order}')
+    print(f'Exit order placed: {order}')
 
-def exit_trade(symbol, side):
-    position_size = float(client.futures_position_information(symbol=symbol)[0]['positionAmt'])
-    if position_size > 0 and side == 'long':
-        order_side = 'SELL'
-    elif position_size < 0 and side == 'short':
-        order_side = 'BUY'
-    else:
-        print(f"No {side} position found for {symbol}")
-        return
-    order = client.futures_create_order(
-        symbol=symbol,
-        side=order_side,
-        type='MARKET',
-        quantity=abs(position_size)
-    )
-    print(f'{side.capitalize()} exit order placed: {order}')
-
-print()
-print('Init main(): ')
-print()
+def calculate_ema(candles, period):
+    prices = [float(candle['close']) for candle in candles]
+    ema = []
+    sma = sum(prices[:period]) / period
+    multiplier = 2 / (period + 1)
+    ema.append(sma)
+    for price in prices[period:]:
+        ema.append((price - ema[-1]) * multiplier + ema[-1])
+    return ema
 
 def main():
     # Variables
@@ -508,8 +475,8 @@ def main():
             # Check if balance is zero
             account_balance = float(get_account_balance())
             if account_balance == 0:
-                print("Balance is zero. Restarting script.")
-                os.execv(sys.executable, ['python'] + sys.argv)
+                print("Balance is zero. Exiting program.")
+                break
 
             # Define start and end time for historical data
             start_time = int(time.time()) - (1800 * 4)  # 60-minute interval (4 candles)
@@ -524,83 +491,98 @@ def main():
 
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
-                percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
-                percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
-                mtf_average = signals['1m']['mtf_average']
+                # Check if the combined percent to min/max signal keys exist
+                if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m']:
+                    percent_to_min_combined = signals['1m']['combined_percent_to_min']
+                    percent_to_max_combined = signals['1m']['combined_percent_to_max']
+                    percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
+                    percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
+                    percent_to_min_momentum = signals['1m']['momentum_percent_to_min']
+                    percent_to_max_momentum = signals['1m']['momentum_percent_to_max']
+                    mtf_average = signals['1m']['mtf_average']
 
-                # Calculate the slow and fast EMA
-                ema_slow = calculate_ema(candles, EMA_SLOW_PERIOD)
-                ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
+                    # Calculate the slow and fast EMA
+                    ema_slow = calculate_ema(candles, EMA_SLOW_PERIOD)
+                    ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
 
-                # Get the GMMA signal
-                gmma = gmma_swt(candles, [3, 5, 8, 10, 12, 15, 30, 35, 40, 45, 50, 60])
+                    # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
+                    if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
+                        # Place a long trade
+                        if not trade_open:
+                            entry_long(TRADE_SYMBOL)
+                            trade_open = True
+                            trade_side = 'long'
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+                            print(f"Entered long trade at {trade_entry_time}")
+                        else:
+                            print("Trade already open.")
 
-                # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price and the price is above the GMMA for a long trade
-                if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close'] and candles[-1]['close'] < gmma[-1] and not trade_open:
-                    # Place a long trade
-                    entry_long(TRADE_SYMBOL)
-                    trade_open = True
-                    trade_side = 'long'
-                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                    trade_exit_pnl = 0
-                    trade_entry_time = int(time.time())
-                    print(f"Entered long trade at {trade_entry_time}")
+                    # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
+                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val < 25 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
+                        # Place a short trade
+                        if not trade_open:
+                            entry_short(TRADE_SYMBOL)
+                            trade_open = True
+                            trade_side = 'short'
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+                            print(f"Entered short trade at {trade_entry_time}")
+                        else:
+                            print("Trade already open.")
 
-                # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price and the price is below the GMMA for a short trade
-                elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val > 90 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close'] and candles[-1]['close'] > gmma[-1] and not trade_open:
-                    # Place a short trade
-                    entry_short(TRADE_SYMBOL)
-                    trade_open = True
-                    trade_side = 'short'
-                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                    trade_exit_pnl = 0
-                    trade_entry_time = int(time.time())
-                    print(f"Entered short trade at {trade_entry_time}")
+                    # Check if the trade has exceeded the stop loss threshold
+                    elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
+                        # Exit the trade
+                        exit_trade(TRADE_SYMBOL, trade_side)
+                        trade_open = False
+                        trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                        print(f"Exited trade at stop loss threshold {int(time.time())}")
 
-                # Check if the trade has exceeded the stop loss threshold
-                elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
-                    # Exit the trade
-                    exit_trade(TRADE_SYMBOL, trade_side)
-                    trade_open = False
-                    trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                    print(f"Exited trade at stop loss threshold {int(time.time())}")
+                        # Enter a new trade with reversed side
+                        if trade_side == 'long':
+                            entry_short(TRADE_SYMBOL)
+                            trade_side = 'short'
+                        elif trade_side == 'short':
+                            entry_long(TRADE_SYMBOL)
+                            trade_side = 'long'
 
-                    # Enter a new trade with reversed side
-                    if trade_side == 'long':
-                        entry_short(TRADE_SYMBOL)
-                        trade_side = 'short'
-                    elif trade_side == 'short':
-                        entry_long(TRADE_SYMBOL)
-                        trade_side = 'long'
+                        # Reset trade variables
+                        trade_open = True
+                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                        trade_exit_pnl = 0
+                        trade_entry_time = int(time.time())
 
-                    # Reset trade variables
-                    trade_open = True
-                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                    trade_exit_pnl = 0
-                    trade_entry_time = int(time.time())
+                    # Check if the trade has exceeded the take profit threshold
+                    elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
+                        # Exit the trade
+                        exit_trade(TRADE_SYMBOL, trade_side)
+                        trade_open = False
+                        trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                        print(f"Exited trade at take profit threshold {int(time.time())}")
 
-                # Check if the trade has exceeded the take profit threshold
-                elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
-                    # Exit the trade
-                    exit_trade(TRADE_SYMBOL, trade_side)
-                    trade_open = False
-                    trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                    print(f"Exited trade at take profit threshold {int(time.time())}")
+                        # Reset trade variables
+                        trade_open = True
+                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                        trade_exit_pnl = 0
+                        trade_entry_time = int(time.time())
 
-                    # Reset trade variables
-                    trade_open = True
-                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                    trade_exit_pnl = 0
-                    trade_entry_time = int(time.time())
+                        break
 
-                    restart_script()
-                    
-            # Wait for the next candle
+                    # Print the signal values for debugging purposes
+                    print(f"HT Sine Wave Percent to Min: {percent_to_min_val}, HT Sine Wave Percent to Max: {percent_to_max_val}, Momentum Percent to Min: {percent_to_min_momentum}, Momentum Percent to Max: {percent_to_max_momentum}")
+                    print(f"Combined Percent to Min: {percent_to_min_combined}, Combined Percent to Max: {percent_to_max_combined}, MTF Average: {mtf_average}")
+                    print(f"Fast EMA: {ema_fast[-1]}, Slow EMA: {ema_slow[-1]}")
+                    print(f"Current PNL: {float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])}, Entry PNL: {trade_entry_pnl}, Exit PNL: {trade_exit_pnl}")
+                    print("")
+
+            # Wait for the next iteration
             time.sleep(5)
 
         except Exception as e:
-            print(f"Error: {e}")
-            time.sleep(5)
+            print(f"An error occurred: {e}")
             continue
 
 # Run the main function
