@@ -8,6 +8,7 @@ import datetime
 from datetime import timedelta
 from decimal import Decimal
 import decimal
+import pywt
 
 # binance module imports
 from binance.client import Client as BinanceClient
@@ -400,6 +401,30 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 
+def gmma_swt(candles, periods, wavelet='db2', level=2):
+    prices = np.array([candle['close'] for candle in candles])
+    medians = []
+    for p in periods:
+        high = np.array([candle['high'] for candle in candles[-p:]])
+        low = np.array([candle['low'] for candle in candles[-p:]])
+        median = (high + low) / 2
+        medians.append(median.mean())
+    gmma = talib.MA(prices, timeperiod=1, matype=1)
+    for i in range(len(prices)):
+        new_medians = []
+        for p in periods:
+            high = candles[-p]['high']
+            low = candles[-p]['low']
+            new_median = (high + low) / 2
+            new_medians.append(new_median)
+        new_medians_avg = np.mean(new_medians)
+        medians.append(new_medians_avg)
+        del medians[0]
+        coeffs = pywt.swt(medians, wavelet, level=level)
+        filtered = coeffs[0][-1]
+        gmma[i] = filtered
+    return gmma
+
 def main():
     # Variables
     global closed_positions
@@ -449,8 +474,11 @@ def main():
                 ema_slow = calculate_ema(candles, EMA_SLOW_PERIOD)
                 ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
 
-                # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
-                if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close'] and not trade_open:
+                # Get the GMMA signal
+                gmma = gmma_swt(candles, [3, 5, 8, 10, 12, 15, 30, 35, 40, 45, 50, 60])
+
+                # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price and the price is above the GMMA for a long trade
+                if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close'] and candles[-1]['close'] < gmma[-1] and not trade_open:
                     # Place a long trade
                     entry_long(TRADE_SYMBOL)
                     trade_open = True
@@ -460,8 +488,8 @@ def main():
                     trade_entry_time = int(time.time())
                     print(f"Entered long trade at {trade_entry_time}")
 
-                # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
-                elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val > 90 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close'] and not trade_open:
+                # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price and the price is below the GMMA for a short trade
+                elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val > 90 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close'] and candles[-1]['close'] > gmma[-1] and not trade_open:
                     # Place a short trade
                     entry_short(TRADE_SYMBOL)
                     trade_open = True
@@ -501,25 +529,27 @@ def main():
                     trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                     print(f"Exited trade at take profit threshold {int(time.time())}")
 
-                    # Restart the script
-                    print("Take profit threshold reached. Restarting script.")
-                    os.execv(sys.executable, ['python'] + sys.argv)
+                    # Enter a new trade with reversed side
+                    if trade_side == 'long':
+                        entry_short(TRADE_SYMBOL)
+                        trade_side = 'short'
+                    elif trade_side == 'short':
+                        entry_long(TRADE_SYMBOL)
+                        trade_side = 'long'
 
-            # Print trade status
-            if trade_open:
-                current_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                print(f"Trade is open. Side: {trade_side}. Entry PnL: {trade_entry_pnl}. Current PnL: {current_pnl}. Exit PnL: {trade_exit_pnl}. Trade duration: {int((time.time() - trade_entry_time) / 60)} minutes.")
-            else:
-                print("No trade is open.")
+                    # Reset trade variables
+                    trade_open = True
+                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                    trade_exit_pnl = 0
+                    trade_entry_time = int(time.time())
 
-            # Sleep for 5 seconds before checking again
+            # Wait for the next candle
             time.sleep(5)
 
-        except KeyboardInterrupt:
-            print("KeyboardInterrupt detected. Exiting program.")
-            break
         except Exception as e:
             print(f"Error: {e}")
+            time.sleep(5)
+            continue
 
 # Run the main function
 if __name__ == '__main__':
