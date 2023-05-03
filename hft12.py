@@ -24,13 +24,12 @@ with open("credentials.txt", "r") as f:
 client = BinanceClient(api_key, api_secret)
 
 # Define a function to get the account balance in BUSD
-def get_account_balance(asset='USDT'):
-    try:
-        balance = client.futures_account_balance()[asset]
-    except BinanceAPIException as e:
-        print(e)
-        return 0
-    return balance['availableBalance']
+def get_account_balance():
+    accounts = client.futures_account_balance()
+    for account in accounts:
+        if account['asset'] == 'BUSD':
+            bUSD_balance = float(account['balance'])
+            return bUSD_balance
 
 # Get the USDT balance of the futures account
 bUSD_balance = get_account_balance()
@@ -537,10 +536,6 @@ def main():
 
             # Get the MTF signal
             signals = get_mtf_signal_v2(candles, timeframes, percent_to_min=1, percent_to_max=1)
-            if signals is None:
-                print("Error: signals is None")
-                time.sleep(5)
-                continue
 
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
@@ -552,13 +547,14 @@ def main():
                     percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
                     percent_to_min_momentum = signals['1m']['momentum_percent_to_min']
                     percent_to_max_momentum = signals['1m']['momentum_percent_to_max']
+                    mtf_average = signals['1m']['mtf_average']
 
                     # Calculate the slow and fast EMA
                     ema_slow = calculate_ema(candles, EMA_SLOW_PERIOD)
                     ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
 
-                    # Check if the fast EMA crosses above the slow EMA and the HT Sine Wave Percent to Min is below the threshold for a long trade
-                    if ema_fast[-1] > ema_slow[-1] and percent_to_min_val < BUY_THRESHOLD and percent_to_min_combined < percent_to_max_combined:
+                    # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
+                    if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
                         # Place a long trade
                         entry_long(TRADE_SYMBOL)
                         trade_open = True
@@ -568,8 +564,8 @@ def main():
                         trade_entry_time = int(time.time())
                         print(f"Entered long trade at {trade_entry_time}")
                     
-                    # Check if the fast EMA crosses below the slow EMA and the HT Sine Wave Percent to Max is below the threshold for a short trade
-                    elif ema_fast[-1] < ema_slow[-1] and percent_to_max_val < SELL_THRESHOLD and percent_to_max_combined < percent_to_min_combined:
+                    # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
+                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_min_val > 90 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
                         # Place a short trade
                         entry_short(TRADE_SYMBOL)
                         trade_open = True
@@ -600,6 +596,7 @@ def main():
                     print(f"HT Sine Wave Percent to Max: {percent_to_max_val:.2f}%")
                     print(f"Momentum Percent to Min: {percent_to_min_momentum:.2f}%")
                     print(f"Momentum Percent to Max: {percent_to_max_momentum:.2f}%")
+                    print(f"MTF Average: {mtf_average:.2f}")
 
             # Sleep for 5 seconds before making the next iteration
             time.sleep(5)
