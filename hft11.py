@@ -510,7 +510,7 @@ def main():
             # Check if we need to exit the trade due to take profit, stop loss, or sinewave reversal
             if trade_open:
                 current_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                if (current_pnl < trade_entry_pnl * -0.0112):
+                if (current_pnl < trade_entry_pnl * -STOP_LOSS_THRESHOLD):
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
@@ -519,7 +519,7 @@ def main():
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
                     print(f"Trade exited with pnl: {current_pnl:.2f}")
-                elif (current_pnl > trade_entry_pnl * 0.0336):
+                elif (current_pnl > trade_entry_pnl * TAKE_PROFIT_THRESHOLD):
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
@@ -528,25 +528,7 @@ def main():
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
                     print(f"Trade exited with pnl: {current_pnl:.2f}")
-                elif trade_side == 'long' and 'min_threshold' in signals['1m'] and signals['1m']['min_threshold'] < STOP_LOSS_THRESHOLD:
-                    exit_trade()
-                    closed_positions.append(position)
-                    trade_open = False
-                    trade_side = None
-                    trade_entry_pnl = 0
-                    trade_exit_pnl = current_pnl
-                    trade_entry_time = 0
-                    print("Stop loss triggered")
-                elif trade_side == 'short' and 'max_threshold' in signals['1m'] and signals['1m']['max_threshold'] > TAKE_PROFIT_THRESHOLD:
-                    exit_trade()
-                    closed_positions.append(position)
-                    trade_open = False
-                    trade_side = None
-                    trade_entry_pnl = 0
-                    trade_exit_pnl = current_pnl
-                    trade_entry_time = 0
-                    print("Take profit triggered")
-                elif trade_side == 'long' and 'max_threshold' in signals['1m'] and signals['1m']['max_threshold'] < BUY_THRESHOLD:
+                elif trade_side == 'long' and 'min_threshold' in signals['1m'] and signals['1m']['min_threshold'] < BUY_THRESHOLD:
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
@@ -555,7 +537,7 @@ def main():
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
                     print("Sine wave reversal - sell")
-                elif trade_side == 'short' and 'min_threshold' in signals['1m'] and signals['1m']['min_threshold'] > SELL_THRESHOLD:
+                elif trade_side == 'short' and 'max_threshold' in signals['1m'] and signals['1m']['max_threshold'] > SELL_THRESHOLD:
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
