@@ -447,89 +447,144 @@ def main():
     global EMA_SLOW_PERIOD
     global EMA_FAST_PERIOD
 
-    # Define start and end time for historical data
-    start_time = int(time.time()) - (86400 * 30)  # 30 days ago
-    end_time = int(time.time())
-
     # Initialize variables for tracking trade state
     trade_open = False
     trade_side = None
     trade_entry_pnl = 0
     trade_exit_pnl = 0
-
-    # Define the candles and timeframes to use for the signals
-    candles = get_historical_candles(TRADE_SYMBOL, start_time, end_time, '1m')
-    timeframes = ['1m', '3m', '5m']
+    trade_entry_time = 0
 
     while True:
-        # Get the MTF signal
-        signals = get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
-        if signals is None:
-            print("Error: signals is None")
-            time.sleep(1)
-            continue
+        try:
+            # Define start and end time for historical data
+            start_time = int(time.time()) - (1800 * 4)  # 60-minute interval (4 candles)
+            end_time = int(time.time())
 
-        # Check if the '1m' key exists in the signals dictionary
-        if '1m' in signals:
-            percent_to_min_val = signals['1m']['min_threshold']
-            percent_to_max_val = signals['1m']['max_threshold']
-            
-            # Check if the 'combined_percent_to_min' and 'combined_percent_to_max' keys exist in the dictionary for the '1m' timeframe
-            if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m']:
-                percent_to_min_combined = signals['1m']['combined_percent_to_min']
-                percent_to_max_combined = signals['1m']['combined_percent_to_max']
+            # Define the candles and timeframes to use for the signals
+            candles = get_historical_candles(TRADE_SYMBOL, start_time, end_time, '1m')
+            timeframes = ['1m', '3m', '5m']
+
+            # Get the MTF signal
+            signals = get_mtf_signal_v2(candles, timeframes, percent_to_min=1, percent_to_max=1)
+            if signals is None:
+                print("Error: signals is None")
+                time.sleep(5)
+                continue
+
+            # Check if the '1m' key exists in the signals dictionary
+            if '1m' in signals:
+                # Check if the HT Sine Wave Percent to Min/Max are "nan"
+                if math.isnan(signals['1m']['min_threshold']) or math.isnan(signals['1m']['max_threshold']):
+                    print("Error: HT Sine Wave Percent to Min/Max are 'nan'")
+                    time.sleep(5)
+                    continue
+
+                # Check if the combined percent to min/max and momentum signal keys exist
+                if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m'] \
+                        and 'momentum_signal' in signals['1m']:
+                    percent_to_min_combined = signals['1m']['combined_percent_to_min']
+                    percent_to_max_combined = signals['1m']['combined_percent_to_max']
+                    momentum_signal = signals['1m']['momentum_signal']
+
+                    # Check if the combined percent to min/max is greater than 75%
+                    if percent_to_min_combined > 75 and percent_to_max_combined > 75:
+                        # Check if the HT Sine Wave Percent to Min is above the threshold for a long trade
+                        if signals['1m']['min_threshold'] > 50:
+                            enter_trade('long')
+                            trade_open = True
+                            trade_side = 'long'
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+                            print("Entered long trade")
+                        # Check if the HT Sine Wave Percent to Max is below the threshold for a short trade
+                        elif signals['1m']['max_threshold'] < 50:
+                            enter_trade('short')
+                            trade_open = True
+                            trade_side = 'short'
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+                            print("Entered short trade")
+                    else:
+                        print("Combined Percent to Min/Max is not greater than 75%")
+                else:
+                    print("Error: Combined Percent to Min/Max or Momentum Signal not found in '1m' timeframe of signals dictionary")
             else:
-                percent_to_min_combined = 0.0
-                percent_to_max_combined = 0.0
-            
-            momentum_signal = signals['1m'].get('momentum_signal', 0)
-            mtf_averages = signals['1m'].get('mtf_averages', [])
+                print("Error: '1m' timeframe not found in signals dictionary")
 
             # Check if we need to exit the trade due to take profit, stop loss, or sinewave reversal
             if trade_open:
                 current_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                if (current_pnl < trade_entry_pnl * -0.0113) or (current_pnl > trade_entry_pnl * 0.0336):
+                if (current_pnl < trade_entry_pnl * -0.0112):
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
                     trade_side = None
                     trade_entry_pnl = 0
                     trade_exit_pnl = current_pnl
+                    trade_entry_time = 0
                     print(f"Trade exited with pnl: {current_pnl:.2f}")
-                else:
-                    time_diff = int(time.time()) - trade_entry_time
-                    if time_diff > 1800:
-                        exit_trade()
-                        closed_positions.append(position)
-                        trade_open = False
-                        trade_side = None
-                        trade_entry_pnl = 0
-                        trade_exit_pnl = current_pnl
-                        print(f"Trade exited after 30 minutes with pnl: {current_pnl:.2f}")
+                elif (current_pnl > trade_entry_pnl * 0.0335):
+                    exit_trade()
+                    closed_positions.append(position)
+                    trade_open = False
+                    trade_side = None
+                    trade_entry_pnl = 0
+                    trade_exit_pnl = current_pnl
+                    trade_entry_time = 0
+                    print(f"Trade exited with pnl: {current_pnl:.2f}")
+                elif trade_side == 'long' and signals['1m']['max_threshold'] < STOP_LOSS_THRESHOLD:
+                    exit_trade()
+                    closed_positions.append(position)
+                    trade_open = False
+                    trade_side = None
+                    trade_entry_pnl = 0
+                    trade_exit_pnl = current_pnl
+                    trade_entry_time = 0
+                    print("Stop loss triggered")
+                elif trade_side == 'short' and signals['1m']['min_threshold'] > TAKE_PROFIT_THRESHOLD:
+                    exit_trade()
+                    closed_positions.append(position)
+                    trade_open = False
+                    trade_side = None
+                    trade_entry_pnl = 0
+                    trade_exit_pnl = current_pnl
+                    trade_entry_time = 0
+                    print("Take profit triggered")
+                elif trade_side == 'long' and signals['1m']['max_threshold'] < BUY_THRESHOLD:
+                    exit_trade()
+                    closed_positions.append(position)
+                    trade_open = False
+                    trade_side = None
+                    trade_entry_pnl = 0
+                    trade_exit_pnl = current_pnl
+                    trade_entry_time = 0
+                    print("Sine wave reversal - exiting long trade")
+                elif trade_side == 'short' and signals['1m']['min_threshold'] > SELL_THRESHOLD:
+                    exit_trade()
+                    closed_positions.append(position)
+                    trade_open = False
+                    trade_side = None
+                    trade_entry_pnl = 0
+                    trade_exit_pnl = current_pnl
+                    trade_entry_time = 0
+                    print("Sine wave reversal - exiting short trade")
 
-            # Check if we need to enter a new trade
-            if (percent_to_min_val <= percent_to_max_val) and \
-               (percent_to_min_combined <= percent_to_max_combined) and \
-               (percent_to_min_val <= 15) and \
-               any(avg > candles[-1]['close'] for avg in mtf_averages):
-                if momentum_signal > BUY_THRESHOLD:
-                    # Enter long trade
-                    entry_long(TRADE_SIZE, TRADE_SYMBOL)
-                    trade_open = True
-                    trade_side = 'long'
-                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                    trade_entry_time = int(time.time())
-                    print("Reversal at min of sine triggered, init long")
-                elif momentum_signal < -SELL_THRESHOLD:
-                    # Enter short trade
-                    entry_short(TRADE_SIZE, TRADE_SYMBOL)
-                    trade_open = True
-                    trade_side = 'short'
-                    trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                    trade_entry_time = int(time.time())
-                    print("Reversal at max of sine triggered, init short")
-        
-        time.sleep(5)
+            # Check if we need to cancel and re-enter the trade due to a change in leverage
+            if trade_open and float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['leverage']) != TRADE_LVRG:
+                exit_trade()
+                enter_trade(trade_side)
+                trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                print("Trade re-entered due to change in leverage")
+
+            # Wait for the next candle
+            time_to_wait = 60 - (int(time.time()) % 60)
+            time.sleep(time_to_wait)
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            time.sleep(5)
+            continue
 
 # Run the main function
 if __name__ == '__main__':
