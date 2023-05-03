@@ -484,7 +484,7 @@ def main():
 
             # Define the candles and timeframes to use for the signals
             candles = get_historical_candles(TRADE_SYMBOL, start_time, end_time, '1m')
-            timeframes = ['1m', '3m', '5m']
+            timeframes = ['1m']
 
             # Get the MTF signal
             signals = get_mtf_signal_v2(candles, timeframes, percent_to_min=1, percent_to_max=1)
