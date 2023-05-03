@@ -23,7 +23,7 @@ with open("credentials.txt", "r") as f:
 # Instantiate Binance client
 client = BinanceClient(api_key, api_secret)
 
-# Define a function to get the account balance in USDT
+# Define a function to get the account balance in BUSD
 def get_account_balance():
     accounts = client.futures_account_balance()
     for account in accounts:
@@ -501,7 +501,7 @@ def main():
     while True:
         try:
             # Check if balance is zero
-            account_balance = float(client.futures_account_balance()[0]['balance'])
+            account_balance = float(get_account_balance())
             if account_balance == 0:
                 print("Balance is zero. Exiting program.")
                 break
