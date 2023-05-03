@@ -109,7 +109,8 @@ def get_historical_candles(symbol, start_time, end_time, timeframe):
     candles = client.futures_klines(symbol=symbol, interval=timeframe, startTime=start_time * 1000, endTime=end_time * 1000)
     candles_by_timeframe = {}
     for tf in ['1m', '3m', '5m']:
-        candles_by_timeframe[tf] = [ {'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles ]
+        tf_candles = [{'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles if candle[6] == tf]
+        candles_by_timeframe[tf] = tf_candles
     return candles_by_timeframe
 
 print()
@@ -429,6 +430,54 @@ def calculate_ema(candles, period):
     prices = np.array([float(candle['close']) for candle in candles])
     ema = talib.EMA(prices, timeperiod=period)
     return ema
+
+def entry_long(symbol):
+    # Get your BUSD balance
+    balance = client.futures_account_balance(asset='BUSD')['balance']
+    # Calculate the quantity to buy
+    price = client.futures_symbol_ticker(symbol=symbol)['price']
+    quantity = int(float(balance) * 20 / float(price))
+    # Place the buy order
+    order = client.futures_create_order(
+        symbol=symbol,
+        side='BUY',
+        type='MARKET',
+        quantity=quantity
+    )
+    print(f'Buy order placed: {order}')
+
+def entry_short(symbol):
+    # Get your position size
+    position_size = client.futures_position_information(symbol=symbol)[0]['positionAmt']
+    # Get the current price
+    price = client.futures_symbol_ticker(symbol=symbol)['price']
+    # Calculate the quantity to sell
+    quantity = int(float(position_size) * 20)
+    # Place the sell order
+    order = client.futures_create_order(
+        symbol=symbol,
+        side='SELL',
+        type='MARKET',
+        quantity=quantity
+    )
+    print(f'Sell order placed: {order}')
+
+def exit_trade(symbol, side):
+    position_size = float(client.futures_position_information(symbol=symbol)[0]['positionAmt'])
+    if position_size > 0 and side == 'long':
+        order_side = 'SELL'
+    elif position_size < 0 and side == 'short':
+        order_side = 'BUY'
+    else:
+        print(f"No {side} position found for {symbol}")
+        return
+    order = client.futures_create_order(
+        symbol=symbol,
+        side=order_side,
+        type='MARKET',
+        quantity=abs(position_size)
+    )
+    print(f'{side.capitalize()} exit order placed: {order}')
 
 def main():
     # Variables
