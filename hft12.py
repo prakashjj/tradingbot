@@ -400,104 +400,6 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 
-def entry_long(symbol):
-    # Get the BUSD balance of the account
-    account_balance = float(get_account_balance('BUSD'))
-
-    # Calculate the quantity of the trade as the entire BUSD balance
-    quantity = int(account_balance / float(get_symbol_price(symbol)))
-
-    # Place the buy order
-    order = client.futures_create_order(
-        symbol=symbol,
-        side='BUY',
-        type='MARKET',
-        quantity=quantity,
-        recvWindow=10000
-    )
-
-    # Print the order confirmation
-    print(f'Long entry order placed: {order}')
-
-
-def entry_short(symbol):
-    # Get the BUSD balance of the account
-    account_balance = float(get_account_balance('BUSD'))
-
-    # Calculate the quantity of the trade as the entire BUSD balance
-    quantity = int(account_balance / float(get_symbol_price(symbol)))
-
-    # Place the sell order
-    order = client.futures_create_order(
-        symbol=symbol,
-        side='SELL',
-        type='MARKET',
-        quantity=quantity,
-        recvWindow=10000
-    )
-
-    # Print the order confirmation
-    print(f'Short entry order placed: {order}')
-
-
-def exit_trade():
-    global TRADE_SYMBOL
-    global TRADE_TYPE
-    global TRADE_LVRG
-    global closed_positions
-
-    # Get the current position information
-    position_info = client.futures_position_information(symbol=TRADE_SYMBOL)
-
-    # Check if the position is long or short
-    if position_info[0]['positionSide'] == 'LONG':
-        side = 'long'
-    elif position_info[0]['positionSide'] == 'SHORT':
-        side = 'short'
-    else:
-        # Position is flat, nothing to exit
-        return
-
-    # Close the position
-    order = client.futures_create_order(
-        symbol=TRADE_SYMBOL,
-        side=OPPOSITE_SIDE[side],
-        type='MARKET',
-        quantity=abs(float(position_info[0]['positionAmt'])),
-        recvWindow=10000
-    )
-
-    # Add the closed position to the closed_positions list
-    closed_positions.append({
-        'symbol': TRADE_SYMBOL,
-        'type': TRADE_TYPE,
-        'side': side,
-        'entry_time': int(position_info[0]['time']),
-        'entry_price': float(position_info[0]['entryPrice']),
-        'exit_time': int(time.time()),
-        'exit_price': float(order['avgPrice']),
-        'quantity': abs(float(position_info[0]['positionAmt'])),
-        'profit_loss': float(order['cumQuoteQty']) - float(position_info[0]['positionInitialMargin']),
-        'stop_loss_threshold': STOP_LOSS_THRESHOLD,
-        'take_profit_threshold': TAKE_PROFIT_THRESHOLD
-    })
-
-    # Print confirmation of the closed position
-    print(f"Closed {side} position at {order['avgPrice']}")
-
-    # Check if the stop loss was triggered
-    if abs(float(position_info[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
-        # Enter a new trade with the opposite side
-        if TRADE_TYPE == 'LONG':
-            entry_short(TRADE_SYMBOL)
-        else:
-            entry_long(TRADE_SYMBOL)
-
-
-print()
-print('Init main(): ')
-print()
-
 def main():
     # Variables
     global closed_positions
@@ -556,24 +458,30 @@ def main():
                     # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
                     if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
                         # Place a long trade
-                        entry_long(TRADE_SYMBOL)
-                        trade_open = True
-                        trade_side = 'long'
-                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        trade_exit_pnl = 0
-                        trade_entry_time = int(time.time())
-                        print(f"Entered long trade at {trade_entry_time}")
-                    
+                        if not trade_open:
+                            entry_long(TRADE_SYMBOL)
+                            trade_open = True
+                            trade_side = 'long'
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+                            print(f"Entered long trade at {trade_entry_time}")
+                        else:
+                            print("Trade already open.")
+
                     # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
                     elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_min_val > 90 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
                         # Place a short trade
-                        entry_short(TRADE_SYMBOL)
-                        trade_open = True
-                        trade_side = 'short'
-                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        trade_exit_pnl = 0
-                        trade_entry_time = int(time.time())
-                        print(f"Entered short trade at {trade_entry_time}")
+                        if not trade_open:
+                            entry_short(TRADE_SYMBOL)
+                            trade_open = True
+                            trade_side = 'short'
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+                            print(f"Entered short trade at {trade_entry_time}")
+                        else:
+                            print("Trade already open.")
 
                     # Check if the trade has exceeded the stop loss threshold
                     if trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
@@ -592,18 +500,17 @@ def main():
                         print(f"Exited trade at take profit threshold {int(time.time())}")
 
                     # Print the signal values for debugging purposes
-                    print(f"HT Sine Wave Percent to Min: {percent_to_min_val:.2f}%")
-                    print(f"HT Sine Wave Percent to Max: {percent_to_max_val:.2f}%")
-                    print(f"Momentum Percent to Min: {percent_to_min_momentum:.2f}%")
-                    print(f"Momentum Percent to Max: {percent_to_max_momentum:.2f}%")
-                    print(f"MTF Average: {mtf_average:.2f}")
+                    print(f"HT Sine Wave Percent to Min: {percent_to_min_val}, HT Sine Wave Percent to Max: {percent_to_max_val}, Momentum Percent to Min: {percent_to_min_momentum}, Momentum Percent to Max: {percent_to_max_momentum}")
+                    print(f"Combined Percent to Min: {percent_to_min_combined}, Combined Percent to Max: {percent_to_max_combined}, MTF Average: {mtf_average}")
+                    print(f"Fast EMA: {ema_fast[-1]}, Slow EMA: {ema_slow[-1]}")
+                    print(f"Current PNL: {float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])}, Entry PNL: {trade_entry_pnl}, Exit PNL: {trade_exit_pnl}")
+                    print("")
 
-            # Sleep for 5 seconds before making the next iteration
+            # Wait for the next iteration
             time.sleep(5)
 
         except Exception as e:
-            print(e)
-            time.sleep(5)
+            print(f"An error occurred: {e}")
             continue
 
 # Run the main function
