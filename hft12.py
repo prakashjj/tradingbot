@@ -387,7 +387,6 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     # Print the results
     print("Current time:", current_time.strftime('%Y-%m-%d %H:%M:%S'))
     print(f"HT Sine Wave Percent to Min: {percent_to_min_val:.2f}%")
-
     print(f"HT Sine Wave Percent to Max: {percent_to_max_val:.2f}%")
     print(f"Momentum Percent to Min: {percent_to_min_momentum:.2f}%")
     print(f"Momentum Percent to Max: {percent_to_max_momentum:.2f}%")
@@ -523,49 +522,34 @@ def main():
 
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
-                # Check if the combined percent to min/max and momentum signal keys exist
-                if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m'] \
-                        and 'momentum_signal' in signals['1m']:
+                # Check if the combined percent to min/max signal keys exist
+                if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m']:
                     percent_to_min_combined = signals['1m']['combined_percent_to_min']
                     percent_to_max_combined = signals['1m']['combined_percent_to_max']
-                    momentum_signal = signals['1m']['momentum_signal']
+                    percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
+                    percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
+                    percent_to_min_momentum = signals['1m']['momentum_percent_to_min']
+                    percent_to_max_momentum = signals['1m']['momentum_percent_to_max']
 
-                    # Check if the combined percent to min/max is greater than 75%
-                    if percent_to_min_combined < percent_to_max_combined:
-                        # Check if the HT Sine Wave Percent to Min is above the threshold for a long trade
-                        if 'min_threshold' in signals['1m'] and signals['1m']['min_threshold'] > BUY_THRESHOLD:
-                            enter_trade('long')
-                            trade_open = True
-                            trade_side = 'long'
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
-                            trade_entry_time = int(time.time())
-                            print(f"Entered long trade at {trade_entry_time}")
-
-                    # Check if the combined percent to min/max is less than 25%
-                    elif percent_to_min_combined < percent_to_max_combined:
-                        # Check if the HT Sine Wave Percent to Max is below the threshold for a short trade
-                        if 'max_threshold' in signals['1m'] and signals['1m']['max_threshold'] < SELL_THRESHOLD:
-                            enter_trade('short')
-                            trade_open = True
-                            trade_side = 'short'
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
-                            trade_entry_time = int(time.time())
-                            print(f"Entered short trade at {trade_entry_time}")
-
-                    # Check if the momentum signal is less than -0.25 for a long trade or greater than 0.25 for a short trade
-                    if momentum_signal < -0.25 and trade_open and trade_side == 'long':
-                        exit_trade()
-                        trade_open = False
-                        trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        print(f"Exited long trade at {int(time.time())}")
-
-                    elif momentum_signal > 0.25 and trade_open and trade_side == 'short':
-                        exit_trade()
-                        trade_open = False
-                        trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        print(f"Exited short trade at {int(time.time())}")
+                    # Check if the HT Sine Wave Percent to Min is below the threshold for a long trade
+                    if percent_to_min_val < 15 and percent_to_min_combined < percent_to_max_combined and percent_to_min_momentum > 0:
+                        enter_trade('long')
+                        trade_open = True
+                        trade_side = 'long'
+                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                        trade_exit_pnl = 0
+                        trade_entry_time = int(time.time())
+                        print(f"Entered long trade at {trade_entry_time}")
+                    
+                    # Check if the HT Sine Wave Percent to Max is below the threshold for a short trade
+                    elif percent_to_max_val < 15 and percent_to_max_combined < percent_to_min_combined and percent_to_max_momentum < 0:
+                        enter_trade('short')
+                        trade_open = True
+                        trade_side = 'short'
+                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                        trade_exit_pnl = 0
+                        trade_entry_time = int(time.time())
+                        print(f"Entered short trade at {trade_entry_time}")
 
                     # Check if the trade has exceeded the stop loss threshold
                     if trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
@@ -580,6 +564,12 @@ def main():
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                         print(f"Exited trade at take profit threshold {int(time.time())}")
+
+                    # Print the signal values for debugging purposes
+                    print(f"HT Sine Wave Percent to Min: {percent_to_min_val:.2f}%")
+                    print(f"HT Sine Wave Percent to Max: {percent_to_max_val:.2f}%")
+                    print(f"Momentum Percent to Min: {percent_to_min_momentum:.2f}%")
+                    print(f"Momentum Percent to Max: {percent_to_max_momentum:.2f}%")
 
             # Sleep for 5 seconds before making the next iteration
             time.sleep(5)
