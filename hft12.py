@@ -400,53 +400,6 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
 
-def entry_long(symbol):
-    # Get your BUSD balance
-    balance = client.futures_account_balance(asset='BUSD')['balance']
-    # Calculate the quantity to buy
-    price = client.futures_symbol_ticker(symbol=symbol)['price']
-    quantity = int(float(balance) * 20 / float(price))
-    # Place the buy order
-    order = client.futures_create_order(
-        symbol=symbol,
-        side='BUY',
-        type='MARKET',
-        quantity=quantity
-    )
-    print(f'Buy order placed: {order}')
-
-def entry_short(symbol):
-    # Get your position size
-    position_size = client.futures_position_information(symbol=symbol)[0]['positionAmt']
-    # Get the current price
-    price = client.futures_symbol_ticker(symbol=symbol)['price']
-    # Calculate the quantity to sell
-    quantity = int(float(position_size) * 20)
-    # Place the sell order
-    order = client.futures_create_order(
-        symbol=symbol,
-        side='SELL',
-        type='MARKET',
-        quantity=quantity
-    )
-    print(f'Sell order placed: {order}')
-
-def exit_trade(symbol, side):
-    position_size = float(client.futures_position_information(symbol=symbol)[0]['positionAmt'])
-    if position_size > 0 and side == 'long':
-        order_side = 'SELL'
-    elif position_size < 0 and side == 'short':
-        order_side = 'BUY'
-    else:
-        print(f"No {side} position found for {symbol}")
-        return
-    order = client.futures_create_order(
-        symbol=symbol,
-        side=order_side,
-        type='MARKET',
-        quantity=abs(position_size)
-    )
-    print(f'{side.capitalize()} exit order placed: {order}')
 def main():
     # Variables
     global closed_positions
@@ -472,8 +425,8 @@ def main():
             # Check if balance is zero
             account_balance = float(get_account_balance())
             if account_balance == 0:
-                print("Balance is zero. Exiting program.")
-                break
+                print("Balance is zero. Restarting script.")
+                os.execv(sys.executable, ['python'] + sys.argv)
 
             # Define start and end time for historical data
             start_time = int(time.time()) - (1800 * 4)  # 60-minute interval (4 candles)
@@ -503,37 +456,31 @@ def main():
                     ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
 
                     # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
-                    if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
+                    if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close'] and not trade_open:
                         # Place a long trade
-                        if not trade_open:
-                            entry_long(TRADE_SYMBOL)
-                            trade_open = True
-                            trade_side = 'long'
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
-                            trade_entry_time = int(time.time())
-                            print(f"Entered long trade at {trade_entry_time}")
-                        else:
-                            print("Trade already open.")
+                        entry_long(TRADE_SYMBOL)
+                        trade_open = True
+                        trade_side = 'long'
+                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                        trade_exit_pnl = 0
+                        trade_entry_time = int(time.time())
+                        print(f"Entered long trade at {trade_entry_time}")
 
                     # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
-                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val < 25 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
+                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val > 90 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close'] and not trade_open:
                         # Place a short trade
-                        if not trade_open:
-                            entry_short(TRADE_SYMBOL)
-                            trade_open = True
-                            trade_side = 'short'
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
-                            trade_entry_time = int(time.time())
-                            print(f"Entered short trade at {trade_entry_time}")
-                        else:
-                            print("Trade already open.")
+                        entry_short(TRADE_SYMBOL)
+                        trade_open = True
+                        trade_side = 'short'
+                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                        trade_exit_pnl = 0
+                        trade_entry_time = int(time.time())
+                        print(f"Entered short trade at {trade_entry_time}")
 
                     # Check if the trade has exceeded the stop loss threshold
-                    if trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
+                    elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
                         # Exit the trade
-                        exit_trade()
+                        exit_trade(TRADE_SYMBOL, trade_side)
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                         print(f"Exited trade at stop loss threshold {int(time.time())}")
@@ -555,39 +502,30 @@ def main():
                     # Check if the trade has exceeded the take profit threshold
                     elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
                         # Exit the trade
-                        exit_trade()
+                        exit_trade(TRADE_SYMBOL, trade_side)
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                         print(f"Exited trade at take profit threshold {int(time.time())}")
 
-                        # Enter a new trade with reversed side
-                        if trade_side == 'long':
-                            entry_short(TRADE_SYMBOL)
-                            trade_side = 'short'
-                        elif trade_side == 'short':
-                            entry_long(TRADE_SYMBOL)
-                            trade_side = 'long'
+                        # Restart the script
+                        print("Take profit threshold reached. Restarting script.")
+                        os.execv(sys.executable, ['python'] + sys.argv)
 
-                        # Reset trade variables
-                        trade_open = True
-                        trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        trade_exit_pnl = 0
-                        trade_entry_time = int(time.time())
+            # Print trade status
+            if trade_open:
+                current_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                print(f"Trade is open. Side: {trade_side}. Entry PnL: {trade_entry_pnl}. Current PnL: {current_pnl}. Exit PnL: {trade_exit_pnl}. Trade duration: {int((time.time() - trade_entry_time) / 60)} minutes.")
+            else:
+                print("No trade is open.")
 
-                    # Print the signal values for debugging purposes
-                    print(f"HT Sine Wave Percent to Min: {percent_to_min_val}, HT Sine Wave Percent to Max: {percent_to_max_val}, Momentum Percent to Min: {percent_to_min_momentum}, Momentum Percent to Max: {percent_to_max_momentum}")
-                    print(f"Combined Percent to Min: {percent_to_min_combined}, Combined Percent to Max: {percent_to_max_combined}")
-                    print(f"MTF Average: {mtf_average}")
-                    print(f"Fast EMA: {ema_fast[-1]}, Slow EMA: {ema_slow[-1]}")
-                    print(f"Unrealized PNL: {float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])}")
+            # Sleep for 10 seconds before checking again
+            time.sleep(10)
 
-            # Wait for 5sec before checking again
-            time.sleep(5)
-
+        except KeyboardInterrupt:
+            print("KeyboardInterrupt detected. Exiting program.")
+            break
         except Exception as e:
-            print(f"{type(e).__name__}: {e}")
-            time.sleep(5)
-            continue
+            print(f"Error: {e}")
 
 # Run the main function
 if __name__ == '__main__':
