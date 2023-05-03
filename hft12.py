@@ -24,16 +24,13 @@ with open("credentials.txt", "r") as f:
 client = BinanceClient(api_key, api_secret)
 
 # Define a function to get the account balance in BUSD
-def get_account_balance():
-    accounts = client.futures_account_balance()
-    for account in accounts:
-        if account['asset'] == 'BUSD':
-            bUSD_balance = float(account['balance'])
-            return bUSD_balance
-
-    # If the account does not have any BUSD balance, return 0.0
-    return 0.0
-
+def get_account_balance(asset='USDT'):
+    try:
+        balance = client.futures_account_balance()[asset]
+    except BinanceAPIException as e:
+        print(e)
+        return 0
+    return balance['availableBalance']
 
 # Get the USDT balance of the futures account
 bUSD_balance = get_account_balance()
@@ -41,16 +38,18 @@ bUSD_balance = get_account_balance()
 # Calculate the trade size based on the USDT balance with 20x leverage
 TRADE_SIZE = bUSD_balance * 20
 
-# Define other constants
-TRADE_SYMBOL = "BTCBUSD"
-TRADE_TYPE = "MARKET"
-TRADE_LVRG = 20
-STOP_LOSS_THRESHOLD = 0.0112  # 1.12% stop loss threshold
-TAKE_PROFIT_THRESHOLD = 0.0336 # 3.36% take profit threshold
-BUY_THRESHOLD = 2.0
-SELL_THRESHOLD = 2.0
-EMA_SLOW_PERIOD = 57
-EMA_FAST_PERIOD = 12
+# Global variables
+TRADE_SYMBOL = 'BTCUSDT'
+TRADE_TYPE = 'LONG'
+TRADE_LVRG = 10
+STOP_LOSS_THRESHOLD = 0.0112 # define 1.12% for stoploss
+TAKE_PROFIT_THRESHOLD = 0.0336 # define 3.36% for stoploss
+BUY_THRESHOLD = -10
+SELL_THRESHOLD = 10
+EMA_SLOW_PERIOD = 50
+EMA_FAST_PERIOD = 20
+closed_positions = []
+OPPOSITE_SIDE = {'long': 'SELL', 'short': 'BUY'}
 
 print()
 
@@ -414,11 +413,13 @@ def entry_long(symbol):
         symbol=symbol,
         side='BUY',
         type='MARKET',
-        quantity=quantity
+        quantity=quantity,
+        recvWindow=10000
     )
 
     # Print the order confirmation
     print(f'Long entry order placed: {order}')
+
 
 def entry_short(symbol):
     # Get the BUSD balance of the account
@@ -432,11 +433,13 @@ def entry_short(symbol):
         symbol=symbol,
         side='SELL',
         type='MARKET',
-        quantity=quantity
+        quantity=quantity,
+        recvWindow=10000
     )
 
     # Print the order confirmation
     print(f'Short entry order placed: {order}')
+
 
 def exit_trade():
     global TRADE_SYMBOL
@@ -448,9 +451,9 @@ def exit_trade():
     position_info = client.futures_position_information(symbol=TRADE_SYMBOL)
 
     # Check if the position is long or short
-    if float(position_info[0]['positionAmt']) > 0:
+    if position_info[0]['positionSide'] == 'LONG':
         side = 'long'
-    elif float(position_info[0]['positionAmt']) < 0:
+    elif position_info[0]['positionSide'] == 'SHORT':
         side = 'short'
     else:
         # Position is flat, nothing to exit
@@ -490,6 +493,7 @@ def exit_trade():
             entry_short(TRADE_SYMBOL)
         else:
             entry_long(TRADE_SYMBOL)
+
 
 print()
 print('Init main(): ')
@@ -549,9 +553,14 @@ def main():
                     percent_to_min_momentum = signals['1m']['momentum_percent_to_min']
                     percent_to_max_momentum = signals['1m']['momentum_percent_to_max']
 
-                    # Check if the HT Sine Wave Percent to Min is below the threshold for a long trade
-                    if percent_to_min_val < 15 and percent_to_min_combined < percent_to_max_combined:
-                        entry_long('long')
+                    # Calculate the slow and fast EMA
+                    ema_slow = calculate_ema(candles, EMA_SLOW_PERIOD)
+                    ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
+
+                    # Check if the fast EMA crosses above the slow EMA and the HT Sine Wave Percent to Min is below the threshold for a long trade
+                    if ema_fast[-1] > ema_slow[-1] and percent_to_min_val < BUY_THRESHOLD and percent_to_min_combined < percent_to_max_combined:
+                        # Place a long trade
+                        entry_long(TRADE_SYMBOL)
                         trade_open = True
                         trade_side = 'long'
                         trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
@@ -559,9 +568,10 @@ def main():
                         trade_entry_time = int(time.time())
                         print(f"Entered long trade at {trade_entry_time}")
                     
-                    # Check if the HT Sine Wave Percent to Max is below the threshold for a short trade
-                    elif percent_to_max_val < 15 and percent_to_max_combined < percent_to_min_combined:
-                        entry_short('short')
+                    # Check if the fast EMA crosses below the slow EMA and the HT Sine Wave Percent to Max is below the threshold for a short trade
+                    elif ema_fast[-1] < ema_slow[-1] and percent_to_max_val < SELL_THRESHOLD and percent_to_max_combined < percent_to_min_combined:
+                        # Place a short trade
+                        entry_short(TRADE_SYMBOL)
                         trade_open = True
                         trade_side = 'short'
                         trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
@@ -571,6 +581,7 @@ def main():
 
                     # Check if the trade has exceeded the stop loss threshold
                     if trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
+                        # Exit the trade
                         exit_trade()
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
@@ -578,6 +589,7 @@ def main():
 
                     # Check if the trade has exceeded the take profit threshold
                     elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
+                        # Exit the trade
                         exit_trade()
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
