@@ -505,6 +505,9 @@ def main():
                     ema_slow = calculate_ema(candles, EMA_SLOW_PERIOD)
                     ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
 
+                    # Print close price, ema_fast and ema_slow values
+                    print("Close price, ema_fast and ema_slow values now at: ", candles[-1]['close'], ema_fast, ema_slow)
+
                     # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
                     if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
                         # Place a long trade
