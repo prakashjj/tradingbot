@@ -473,12 +473,6 @@ def main():
 
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
-                # Check if the HT Sine Wave Percent to Min/Max are "nan"
-                if math.isnan(signals['1m']['min_threshold']) or math.isnan(signals['1m']['max_threshold']):
-                    print("Error: HT Sine Wave Percent to Min/Max are 'nan'")
-                    time.sleep(5)
-                    continue
-
                 # Check if the combined percent to min/max and momentum signal keys exist
                 if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m'] \
                         and 'momentum_signal' in signals['1m']:
@@ -525,7 +519,7 @@ def main():
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
                     print(f"Trade exited with pnl: {current_pnl:.2f}")
-                elif (current_pnl > trade_entry_pnl * 0.0335):
+                elif (current_pnl > trade_entry_pnl * 0.0336):
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
@@ -534,7 +528,7 @@ def main():
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
                     print(f"Trade exited with pnl: {current_pnl:.2f}")
-                elif trade_side == 'long' and signals['1m']['max_threshold'] < STOP_LOSS_THRESHOLD:
+                elif trade_side == 'long' and 'min_threshold' in signals['1m'] and signals['1m']['min_threshold'] < STOP_LOSS_THRESHOLD:
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
@@ -543,7 +537,7 @@ def main():
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
                     print("Stop loss triggered")
-                elif trade_side == 'short' and signals['1m']['min_threshold'] > TAKE_PROFIT_THRESHOLD:
+                elif trade_side == 'short' and 'max_threshold' in signals['1m'] and signals['1m']['max_threshold'] > TAKE_PROFIT_THRESHOLD:
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
@@ -552,7 +546,7 @@ def main():
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
                     print("Take profit triggered")
-                elif trade_side == 'long' and signals['1m']['max_threshold'] < BUY_THRESHOLD:
+                elif trade_side == 'long' and 'max_threshold' in signals['1m'] and signals['1m']['max_threshold'] < BUY_THRESHOLD:
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
@@ -560,8 +554,8 @@ def main():
                     trade_entry_pnl = 0
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
-                    print("Sine wave reversal - exiting long trade")
-                elif trade_side == 'short' and signals['1m']['min_threshold'] > SELL_THRESHOLD:
+                    print("Sine wave reversal - sell")
+                elif trade_side == 'short' and 'min_threshold' in signals['1m'] and signals['1m']['min_threshold'] > SELL_THRESHOLD:
                     exit_trade()
                     closed_positions.append(position)
                     trade_open = False
@@ -569,22 +563,15 @@ def main():
                     trade_entry_pnl = 0
                     trade_exit_pnl = current_pnl
                     trade_entry_time = 0
-                    print("Sine wave reversal - exiting short trade")
+                    print("Sine wave reversal - buy")
 
-            # Check if we need to cancel and re-enter the trade due to a change in leverage
-            if trade_open and float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['leverage']) != TRADE_LVRG:
-                exit_trade()
-                enter_trade(trade_side)
-                trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                print("Trade re-entered due to change in leverage")
-
-            # Wait for the next candle
-            time_to_wait = 60 - (int(time.time()) % 60)
-            time.sleep(time_to_wait)
         except Exception as e:
-            print(f"Error: {str(e)}")
+            print(e)
+            print(traceback.format_exc())
             time.sleep(5)
             continue
+
+        time.sleep(5)
 
 # Run the main function
 if __name__ == '__main__':
