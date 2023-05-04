@@ -514,7 +514,7 @@ def main():
                     if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
                         # Place a long trade if not already open
                         if not trade_open:
-                            entry_long(TRADE_SYMBOL)
+                            entry_long(TRADE_SYMBOL, TRADE_LVRG)
                             trade_open = True
                             trade_side = 'long'
                             trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
@@ -532,10 +532,10 @@ def main():
 
                             # Enter a new trade with reversed side
                             if trade_side == 'long':
-                                entry_short(TRADE_SYMBOL)
+                                entry_short(TRADE_SYMBOL, TRADE_LVRG)
                                 trade_side = 'short'
                             elif trade_side == 'short':
-                                entry_long(TRADE_SYMBOL)
+                                entry_long(TRADE_SYMBOL, TRADE_LVRG)
                                 trade_side = 'long'
 
                             # Reset trade variables
@@ -561,13 +561,13 @@ def main():
                             break
 
                         else:
-                            print("Trade already open. Sacanning market to fit exit momentum")
+                            print("Trade already open. Scanning market to fit exit momentum")
 
-                    # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
-                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val < 25 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
+                    # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Max is greater than 90 and greater than the HT Sine Wave Percent to Min and the MTF average is below the close price for a short trade
+                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val > 75 and percent_to_max_val > percent_to_min_val and mtf_average < candles[-1]['close']:
                         # Place a short trade if not already open
                         if not trade_open:
-                            entry_short(TRADE_SYMBOL)
+                            entry_short(TRADE_SYMBOL, TRADE_LVRG)
                             trade_open = True
                             trade_side = 'short'
                             trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
@@ -585,10 +585,10 @@ def main():
 
                             # Enter a new trade with reversed side
                             if trade_side == 'long':
-                                entry_short(TRADE_SYMBOL)
+                                entry_short(TRADE_SYMBOL, TRADE_LVRG)
                                 trade_side = 'short'
                             elif trade_side == 'short':
-                                entry_long(TRADE_SYMBOL)
+                                entry_long(TRADE_SYMBOL, TRADE_LVRG)
                                 trade_side = 'long'
 
                             # Reset trade variables
@@ -614,20 +614,24 @@ def main():
                             break
 
                         else:
-                            print("Trade already open. Sacanning market to fit exit momentum")
+                            print("Trade already open. Scanning market to fit exit momentum")
 
-                    # Print the signal values for debugging purposes
-                    print(f"HT Sine Wave Percent to Min: {percent_to_min_val}, HT Sine Wave Percent to Max: {percent_to_max_val}, Momentum Percent to Min: {percent_to_min_momentum}, Momentum Percent to Max: {percent_to_max_momentum}")
-                    print(f"Combined Percent to Min: {percent_to_min_combined}, Combined Percent to Max: {percent_to_max_combined}, MTF Average: {mtf_average}")
-                    print(f"Fast EMA: {ema_fast[-1]}, Slow EMA: {ema_slow[-1]}")
-                    print(f"Current PNL: {float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])}, Entry PNL: {trade_entry_pnl}, Exit PNL: {trade_exit_pnl}")
-                    print("")
+                    else:
+                        print("No trade opportunity identified. Scanning market to fit entry momentum")
 
-            # Wait for the next iteration
+                else:
+                    print("Signal keys not found in signals dictionary. Waiting for signals.")
+
+            else:
+                print("1m candles not found. Waiting for candles.")
+
+            # Wait for 5 second before checking for new signals
             time.sleep(5)
 
         except Exception as e:
-            print(f"An error occurred: {e}")
+            print("Error occurred. Retrying in 5 seconds.")
+            print(str(e))
+            time.sleep(5)
             continue
 
 # Run the main function
