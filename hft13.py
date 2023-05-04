@@ -65,37 +65,6 @@ print(timeframes)
 
 print()
 
-def entry_long(symbol):
-    try:
-        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
-        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
-        order = client.futures_create_order(
-            symbol=symbol,
-            side=Client.SIDE_BUY,
-            type=Client.ORDER_TYPE_MARKET,
-            quantity=quantity)
-        print(f"Long order created for {quantity} {symbol} at market price.")
-        return True
-    except BinanceAPIException as e:
-        print(f"Error creating long order: {e}")
-        return False
-
-def entry_short(symbol):
-    try:
-        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
-        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
-        order = client.futures_create_order(
-            symbol=symbol,
-            side=Client.SIDE_SELL,
-            type=Client.ORDER_TYPE_MARKET,
-            quantity=quantity)
-        print(f"Short order created for {quantity} {symbol} at market price.")
-        return True
-    except BinanceAPIException as e:
-        print(f"Error creating short order: {e}")
-        return False
-
-
 # Define start and end time for historical data
 start_time = int(time.time()) - (86400 * 30)  # 30 days ago
 end_time = int(time.time())
@@ -431,6 +400,56 @@ def get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5):
     return signals
 
 get_mtf_signal_v2(candles, timeframes, percent_to_min=5, percent_to_max=5)
+
+def entry_long(symbol):
+    try:
+        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
+        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
+        order = client.futures_create_order(
+            symbol=symbol,
+            side=Client.SIDE_BUY,
+            type=Client.ORDER_TYPE_MARKET,
+            quantity=quantity)
+        print(f"Long order created for {quantity} {symbol} at market price.")
+        return True
+    except BinanceAPIException as e:
+        print(f"Error creating long order: {e}")
+        return False
+
+def entry_short(symbol):
+    try:
+        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
+        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
+        order = client.futures_create_order(
+            symbol=symbol,
+            side=Client.SIDE_SELL,
+            type=Client.ORDER_TYPE_MARKET,
+            quantity=quantity)
+        print(f"Short order created for {quantity} {symbol} at market price.")
+        return True
+    except BinanceAPIException as e:
+        print(f"Error creating short order: {e}")
+        return False
+
+def exit_trade():
+    order = client.futures_create_order(
+        symbol=symbol,
+        side='SELL' if side == 'long' else 'BUY',
+        type='MARKET',
+        quantity=abs(float(client.futures_position_information(symbol=symbol)[0]['positionAmt']))
+    )
+    print(f'Exit order placed: {order}')
+
+def calculate_ema(candles, period):
+    prices = [float(candle['close']) for candle in candles]
+    ema = []
+    sma = sum(prices[:period]) / period
+    multiplier = 2 / (period + 1)
+    ema.append(sma)
+    for price in prices[period:]:
+        ema.append((price - ema[-1]) * multiplier + ema[-1])
+    return ema
+
 
 def main():
     # Variables
