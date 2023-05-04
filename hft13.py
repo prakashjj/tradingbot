@@ -49,12 +49,15 @@ EMA_SLOW_PERIOD = 56
 EMA_FAST_PERIOD = 12
 closed_positions = []
 OPPOSITE_SIDE = {'long': 'SELL', 'short': 'BUY'}
-trade_percentage = 1.0 # 100% of your account balance
+
+# Initialize variables for tracking trade state
+trade_open = False
+trade_side = None
+trade_entry_pnl = 0
+trade_exit_pnl = 0
+trade_entry_time = 0
 
 print()
-
-# Variables
-closed_positions = []
 
 # Print account balance
 print("BUSD Futures balance:", bUSD_balance)
@@ -464,7 +467,6 @@ def main():
     global trade_open
     global trade_side
     global trade_entry_pnl
-    global trade_exit_pnl
     global trade_entry_time
 
     while True:
@@ -502,26 +504,18 @@ def main():
                     # Check if the signals are strong enough to open a trade
                     if percent_to_min_val > BUY_THRESHOLD and mtf_average > BUY_THRESHOLD and not trade_open:
                         print("BUY signal detected.")
-                        order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'BUY', 1)
-                        if order:
+                        if entry_long(TRADE_SYMBOL):
                             trade_open = True
                             trade_side = 'BUY'
                             trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                            print("Trade opened:", order)
-                        else:
-                            print("Error creating order.")
                     elif percent_to_max_val > SELL_THRESHOLD and mtf_average < SELL_THRESHOLD and not trade_open:
                         print("SELL signal detected.")
-                        order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'SELL', 1)
-                        if order:
+                        if entry_short(TRADE_SYMBOL):
                             trade_open = True
                             trade_side = 'SELL'
                             trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                            print("Trade opened:", order)
-                        else:
-                            print("Error creating order.")
 
                 # Check if the trade is open
                 if trade_open:
@@ -529,54 +523,50 @@ def main():
                     if trade_side == 'BUY':
                         current_pnl = get_current_pnl(TRADE_SYMBOL, trade_entry_pnl, trade_side)
                         if current_pnl <= (account_balance * -STOP_LOSS_THRESHOLD):
-                            print("Stop loss threshold reached. Closing trade.")
-                            order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'SELL', 1)
-                            if order:
-                                trade_open = False
-                                trade_exit_pnl = current_pnl
-                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': trade_exit_pnl})
-                                print("Trade closed:", order)
+                            print("Stop loss threshold reached. Reversing trade.")
+                            exit_trade()
+                            trade_side = 'SELL'
+                            if entry_short(TRADE_SYMBOL):
+                                trade_open = True
+                                trade_entry_pnl = 0
+                                trade_entry_time = int(time.time())
                             else:
-                                print("Error creating order.")
+                                trade_open = False
+                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': current_pnl})
                         elif current_pnl >= (account_balance * TAKE_PROFIT_THRESHOLD):
-                            print("Take profit threshold reached. Closing trade.")
-                            order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'SELL', 1)
-                            if order:
-                                trade_open = False
-                                trade_exit_pnl = current_pnl
-                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': trade_exit_pnl})
-                                print("Trade closed:", order)
-                            else:
-                                print("Error creating order.")
+                            print("Take profit threshold reached. Closing all positions.")
+                            exit_trade()
+                            trade_open = False
+                            break
                     elif trade_side == 'SELL':
                         current_pnl = get_current_pnl(TRADE_SYMBOL, trade_entry_pnl, trade_side)
                         if current_pnl <= (account_balance * -STOP_LOSS_THRESHOLD):
-                            print("Stop loss threshold reached. Closing trade.")
-                            order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'BUY', 1)
-                            if order:
-                                trade_open = False
-                                trade_exit_pnl = current_pnl
-                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': trade_exit_pnl})
-                                print("Trade closed:", order)
+                            print("Stop loss threshold reached. Reversing trade.")
+                            exit_trade()
+                            trade_side = 'BUY'
+                            if entry_long(TRADE_SYMBOL):
+                                trade_open = True
+                                trade_entry_pnl = 0
+                                trade_entry_time = int(time.time())
                             else:
-                                print("Error creating order.")
+                                trade_open = False
+                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': current_pnl})
                         elif current_pnl >= (account_balance * TAKE_PROFIT_THRESHOLD):
-                            print("Take profit threshold reached. Closing trade.")
-                            order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'BUY', 1)
-                            if order:
-                                trade_open = False
-                                trade_exit_pnl = current_pnl
-                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': trade_exit_pnl})
-                                print("Trade closed:", order)
-                            else:
-                                print("Error creating order.")
+                            print("Take profit threshold reached. Closing all positions.")
+                            exit_trade()
+                            trade_open = False
 
-            # Wait for 1 minute before checking signals again
+            # Wait for 5sec before checking signals again
             time.sleep(5)
 
         except BinanceAPIException as e:
             print(e.status_code)
             print(e.message)
+            time.sleep(5)
+            continue
+
+        except Exception as e:
+            print(e)
             time.sleep(5)
             continue
 
