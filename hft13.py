@@ -402,47 +402,115 @@ def get_historical_candles(symbol, start_time, end_time, timeframe):
     candles = client.futures_klines(symbol=symbol, interval=timeframe, startTime=start_time * 1000, endTime=end_time * 1000)
     candles_by_timeframe = {}
     for tf in ['1m', '3m', '5m']:
-        candles_by_timeframe[tf] = [ {'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles ]
+        if tf == timeframe:
+            candles_by_timeframe[tf] = [ {'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles ]
+        else:
+            resampled_candles = []
+            for i in range(0, len(candles), int(tf[:-1])):
+                candles_chunk = candles[i:i+int(tf[:-1])]
+                if len(candles_chunk) == int(tf[:-1]):
+                    open_price = float(candles_chunk[0][1])
+                    high_price = max([float(candle[2]) for candle in candles_chunk])
+                    low_price = min([float(candle[3]) for candle in candles_chunk])
+                    close_price = float(candles_chunk[-1][4])
+                    total_volume = sum([float(candle[5]) for candle in candles_chunk])
+                    resampled_candles.append({'open': open_price, 'high': high_price, 'low': low_price, 'close': close_price, 'volume': total_volume})
+            candles_by_timeframe[tf] = resampled_candles
+
     return candles_by_timeframe
+
+def get_current_price(symbol):
+    ticker = client.futures_symbol_ticker(symbol=symbol)
+    return float(ticker['price'])
 
 def entry_long(symbol):
     try:
-        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
-        quantity = (bUSD_balance * trade_percentage) / (symbol_price * TRADE_LVRG)
+        # Get the available account balance and set the leverage to 20x
+        bUSD_balance = float(get_account_balance())
+        leverage = 20
+
+        # Calculate the maximum order quantity based on the current price
+        symbol_price = float(get_current_price(symbol))
+        max_quantity = round((bUSD_balance * leverage) / symbol_price, 6)
+
+        # Calculate the fee for the order
+        fee = round(bUSD_balance * 0.0004, 6)
+
+        # Calculate the order quantity to use the entire bUSD balance after accounting for the fee
+        quantity = round((bUSD_balance - fee) / symbol_price, 6)
+
+        # Create the long order
         order = client.futures_create_order(
             symbol=symbol,
             side=client.SIDE_BUY,
             type=client.ORDER_TYPE_MARKET,
-            quantity=TRADE_SIZE)
-        print(f"Long order created for {quantity} {symbol} at market price.")
+            quantity=quantity,
+            reduceOnly=True,
+            timeInForce='GTC')
+
+        print(f"Long order created for {quantity} {symbol} at market price with {leverage}x leverage.")
         return True
+
     except BinanceAPIException as e:
         print(f"Error creating long order: {e}")
         return False
 
 def entry_short(symbol):
     try:
-        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
-        quantity = (bUSD_balance * trade_percentage) / (symbol_price * TRADE_LVRG)
+        # Get the available account balance and set the leverage to 20x
+        bUSD_balance = float(get_account_balance())
+        leverage = 20
+
+        # Calculate the maximum order quantity based on the current price
+        symbol_price = float(get_current_price(symbol))
+        max_quantity = round((bUSD_balance * leverage) / symbol_price, 6)
+
+        # Calculate the fee for the order
+        fee = round(bUSD_balance * 0.0004, 6)
+
+        # Calculate the order quantity to use the entire bUSD balance after accounting for the fee
+        quantity = round((bUSD_balance - fee) / symbol_price, 6)
+
+        # Create the short order
         order = client.futures_create_order(
             symbol=symbol,
-            side=Client.SIDE_SELL,
-            type=Client.ORDER_TYPE_MARKET,
-            quantity=TRADE_SIZE)
-        print(f"Short order created for {quantity} {symbol} at market price.")
+            side=client.SIDE_SELL,
+            type=client.ORDER_TYPE_MARKET,
+            quantity=quantity,
+            reduceOnly=True,
+            timeInForce='GTC')
+
+        print(f"Short order created for {quantity} {symbol} at market price with {leverage}x leverage.")
         return True
+
     except BinanceAPIException as e:
         print(f"Error creating short order: {e}")
         return False
 
-def exit_trade():
-    order = client.futures_create_order(
-        symbol=symbol,
-        side='SELL' if side == 'long' else 'BUY',
-        type='MARKET',
-        quantity=abs(float(client.futures_position_information(symbol=symbol)[0]['positionAmt']))
-    )
-    print(f'Exit order placed: {order}')
+def exit_trade(symbol):
+    try:
+        total_quantity = 0
+        positions = client.futures_position_information(symbol=symbol)
+
+        for position in positions:
+            if float(position['positionAmt']) != 0:
+                side = 'SELL' if position['positionSide'] == 'LONG' else 'BUY'
+                quantity = abs(float(position['positionAmt']))
+                order = client.futures_create_order(
+                    symbol=symbol,
+                    side=side,
+                    type=client.ORDER_TYPE_MARKET,
+                    quantity=quantity)
+
+                total_quantity += quantity
+                print(f"Closed {quantity} {symbol} position with {side} order at market price.")
+
+        print(f"Total of {total_quantity} {symbol} positions closed.")
+        return True
+
+    except BinanceAPIException as e:
+        print(f"Error closing positions: {e}")
+        return False
 
 def calculate_ema(candles, period):
     prices = [float(candle['close']) for candle in candles]
@@ -478,6 +546,8 @@ def main():
             if account_balance == 0:
                 print("Balance is zero. Exiting program.")
                 break
+            else:
+                print(account_balance)
 
             # Define start and end time for historical data
             start_time = int(time.time()) - (1800 * 4)  # 60-minute interval (4 candles)
@@ -492,6 +562,9 @@ def main():
 
             print()
 
+            # Get the latest close price from the candles
+            current_price = candles[-1]['close']
+
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
                 print(signals)
@@ -504,14 +577,14 @@ def main():
                     mtf_average = signals['1m']['mtf_average']
 
                     # Check if the signals are strong enough to open a trade
-                    if percent_to_min_val > BUY_THRESHOLD and mtf_average > BUY_THRESHOLD and not trade_open:
+                    if (current_price < mtf_average) and (percent_to_min_val < percent_to_max_val) and (percent_to_min_val < 15) and not trade_open:
                         print("BUY signal detected.")
                         if entry_long(TRADE_SYMBOL):
                             trade_open = True
                             trade_side = 'BUY'
                             trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                    elif percent_to_max_val > SELL_THRESHOLD and mtf_average < SELL_THRESHOLD and not trade_open:
+                    elif (current_price > mtf_average) and (percent_to_max_val < percent_to_min_val) and (percent_to_max_val < 15) and not trade_open:
                         print("SELL signal detected.")
                         if entry_short(TRADE_SYMBOL):
                             trade_open = True
@@ -557,23 +630,12 @@ def main():
                             print("Take profit threshold reached. Closing all positions.")
                             exit_trade()
                             trade_open = False
+                            break
 
-            # Wait for 5sec before checking signals again
             time.sleep(5)
-
-        except BinanceAPIException as e:
-            print(e.status_code)
-            print(e.message)
-            time.sleep(5)
-            continue
 
         except Exception as e:
-            print(e)
-            time.sleep(5)
-            continue
-
-        except Exception as e:
-            print(e)
+            print("Exception:", str(e))
             time.sleep(5)
             continue
 
