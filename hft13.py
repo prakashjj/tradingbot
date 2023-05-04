@@ -451,7 +451,6 @@ def calculate_ema(candles, period):
     return ema
 
 def main():
-    # Global variables
     global closed_positions
     global TRADE_SYMBOL
     global TRADE_TYPE
@@ -462,13 +461,11 @@ def main():
     global SELL_THRESHOLD
     global EMA_SLOW_PERIOD
     global EMA_FAST_PERIOD
-
-    # Initialize variables for tracking trade state
-    trade_open = False
-    trade_side = None
-    trade_entry_pnl = 0
-    trade_exit_pnl = 0
-    trade_entry_time = 0
+    global trade_open
+    global trade_side
+    global trade_entry_pnl
+    global trade_exit_pnl
+    global trade_entry_time
 
     while True:
         try:
@@ -496,143 +493,95 @@ def main():
                 print(signals)
                 print()
 
-                # Check if the percentes to min/max signal keys exist
-                if 'ht_sine_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m']:
-                    percent_to_min_combined = signals['1m']['combined_percent_to_min']
-                    percent_to_max_combined = signals['1m']['combined_percent_to_max']
+                # Check if the percent to min/max signal keys exist in the '1m' dictionary
+                if '1m' in signals and 'ht_sine_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m']:
                     percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
                     percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
-                    percent_to_min_momentum = signals['1m']['momentum_percent_to_min']
-                    percent_to_max_momentum = signals['1m']['momentum_percent_to_max']
                     mtf_average = signals['1m']['mtf_average']
 
-                    # Calculate the slow and fast EMA
-                    ema_slow = calculate_ema(candles, EMA_SLOW_PERIOD)
-                    ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
-
-                    # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 25 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
-                    if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
-                        # Place a long trade if not already open
-                        if not trade_open:
-                            entry_long(TRADE_SYMBOL, TRADE_LVRG)
+                    # Check if the signals are strong enough to open a trade
+                    if percent_to_min_val > BUY_THRESHOLD and mtf_average > BUY_THRESHOLD and not trade_open:
+                        print("BUY signal detected.")
+                        order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'BUY', 1)
+                        if order:
                             trade_open = True
-                            trade_side = 'long'
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
+                            trade_side = 'BUY'
+                            trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                            print(f"Entered long trade at {trade_entry_time}.")
-
-                        # Check if the trade has exceeded the stop loss threshold
-                        elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
-                            # Exit the trade
-                            exit_trade(TRADE_SYMBOL, trade_side)
-                            trade_open = False
-                            trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            print(f"Exited trade at stop loss threshold {int(time.time())}")
-
-                            # Enter a new trade with reversed side
-                            if trade_side == 'long':
-                                entry_short(TRADE_SYMBOL, TRADE_LVRG)
-                                trade_side = 'short'
-                            elif trade_side == 'short':
-                                entry_long(TRADE_SYMBOL, TRADE_LVRG)
-                                trade_side = 'long'
-
-                            # Reset trade variables
-                            trade_open = True
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
-                            trade_entry_time = int(time.time())
-
-                        # Check if the trade has exceeded the take profit threshold
-                        elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
-                            # Exit the trade
-                            exit_trade(TRADE_SYMBOL, trade_side)
-                            trade_open = False
-                            trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            print(f"Exited trade at take profit threshold {int(time.time())}")
-
-                            # Reset trade variables
-                            trade_open = True
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
-                            trade_entry_time = int(time.time())
-
-                            break
-
+                            print("Trade opened:", order)
                         else:
-                            print("Trade already open. Scanning market to fit exit momentum")
-
-                    # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Max is greater than 75 and greater than the HT Sine Wave Percent to Min and the MTF average is below the close price for a short trade
-                    elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val > 75 and percent_to_max_val > percent_to_min_val and mtf_average < candles[-1]['close']:
-                        # Place a short trade if not already open
-                        if not trade_open:
-                            entry_short(TRADE_SYMBOL, TRADE_LVRG)
+                            print("Error creating order.")
+                    elif percent_to_max_val > SELL_THRESHOLD and mtf_average < SELL_THRESHOLD and not trade_open:
+                        print("SELL signal detected.")
+                        order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'SELL', 1)
+                        if order:
                             trade_open = True
-                            trade_side = 'short'
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
+                            trade_side = 'SELL'
+                            trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                            print(f"Entered short trade at {trade_entry_time}.")
-
-                        # Check if the trade has exceeded the stop loss threshold
-                        elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
-                            # Exit the trade
-                            exit_trade(TRADE_SYMBOL, trade_side)
-                            trade_open = False
-                            trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            print(f"Exited trade at stop loss threshold {int(time.time())}")
-
-                            # Enter a new trade with reversed side
-                            if trade_side == 'long':
-                                entry_short(TRADE_SYMBOL, TRADE_LVRG)
-                                trade_side = 'short'
-                            elif trade_side == 'short':
-                                entry_long(TRADE_SYMBOL, TRADE_LVRG)
-                                trade_side = 'long'
-
-                            # Reset trade variables
-                            trade_open = True
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
-                            trade_entry_time = int(time.time())
-
-                        # Check if the trade has exceeded the take profit threshold
-                        elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
-                            # Exit the trade
-                            exit_trade(TRADE_SYMBOL, trade_side)
-                            trade_open = False
-                            trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            print(f"Exited trade at take profit threshold {int(time.time())}")
-
-                            # Reset trade variables
-                            trade_open = True
-                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                            trade_exit_pnl = 0
-                            trade_entry_time = int(time.time())
-
-                            break
-
+                            print("Trade opened:", order)
                         else:
-                            print("Trade already open. Scanning market to fit exit momentum")
+                            print("Error creating order.")
 
-                    # Print signal details
-                    print(f"Combined Percent to Min: {percent_to_min_combined}")
-                    print(f"Combined Percent to Max: {percent_to_max_combined}")
-                    print(f"HT Sine Percent to Min: {percent_to_min_val}")
-                    print(f"HT Sine Percent to Max: {percent_to_max_val}")
-                    print(f"Momentum Percent to Min: {percent_to_min_momentum}")
-                    print(f"Momentum Percent to Max: {percent_to_max_momentum}")
-                    print(f"MTF Average: {mtf_average}")
-                    print(f"Fast EMA: {ema_fast[-1]}")
-                    print(f"Slow EMA: {ema_slow[-1]}")
-                    print(f"Close Price: {candles[-1]['close']}")
+                # Check if the trade is open
+                if trade_open:
+                    # Check if stop loss or take profit thresholds have been reached
+                    if trade_side == 'BUY':
+                        current_pnl = get_current_pnl(TRADE_SYMBOL, trade_entry_pnl, trade_side)
+                        if current_pnl <= (account_balance * -STOP_LOSS_THRESHOLD):
+                            print("Stop loss threshold reached. Closing trade.")
+                            order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'SELL', 1)
+                            if order:
+                                trade_open = False
+                                trade_exit_pnl = current_pnl
+                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': trade_exit_pnl})
+                                print("Trade closed:", order)
+                            else:
+                                print("Error creating order.")
+                        elif current_pnl >= (account_balance * TAKE_PROFIT_THRESHOLD):
+                            print("Take profit threshold reached. Closing trade.")
+                            order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'SELL', 1)
+                            if order:
+                                trade_open = False
+                                trade_exit_pnl = current_pnl
+                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': trade_exit_pnl})
+                                print("Trade closed:", order)
+                            else:
+                                print("Error creating order.")
+                    elif trade_side == 'SELL':
+                        current_pnl = get_current_pnl(TRADE_SYMBOL, trade_entry_pnl, trade_side)
+                        if current_pnl <= (account_balance * -STOP_LOSS_THRESHOLD):
+                            print("Stop loss threshold reached. Closing trade.")
+                            order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'BUY', 1)
+                            if order:
+                                trade_open = False
+                                trade_exit_pnl = current_pnl
+                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': trade_exit_pnl})
+                                print("Trade closed:", order)
+                            else:
+                                print("Error creating order.")
+                        elif current_pnl >= (account_balance * TAKE_PROFIT_THRESHOLD):
+                            print("Take profit threshold reached. Closing trade.")
+                            order = create_order(TRADE_SYMBOL, TRADE_TYPE, TRADE_LVRG, 'BUY', 1)
+                            if order:
+                                trade_open = False
+                                trade_exit_pnl = current_pnl
+                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': trade_exit_pnl})
+                                print("Trade closed:", order)
+                            else:
+                                print("Error creating order.")
 
-                    # Sleep for a short time to avoid spamming the API
-                    time.sleep(5)
+            # Wait for 1 minute before checking signals again
+            time.sleep(5)
+
+        except BinanceAPIException as e:
+            print(e.status_code)
+            print(e.message)
+            time.sleep(5)
+            continue
 
         except Exception as e:
-            print("Exception:", str(e))
+            print(e)
             time.sleep(5)
             continue
 
