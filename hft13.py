@@ -56,6 +56,7 @@ trade_side = None
 trade_entry_pnl = 0
 trade_exit_pnl = 0
 trade_entry_time = 0
+trade_percentage = 0
 
 print()
 
@@ -407,12 +408,12 @@ def get_historical_candles(symbol, start_time, end_time, timeframe):
 def entry_long(symbol):
     try:
         symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
-        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
+        quantity = (bUSD_balance * trade_percentage) / (symbol_price * TRADE_LVRG)
         order = client.futures_create_order(
             symbol=symbol,
-            side=Client.SIDE_BUY,
-            type=Client.ORDER_TYPE_MARKET,
-            quantity=quantity)
+            side=client.SIDE_BUY,
+            type=client.ORDER_TYPE_MARKET,
+            quantity=TRADE_SIZE)
         print(f"Long order created for {quantity} {symbol} at market price.")
         return True
     except BinanceAPIException as e:
@@ -422,12 +423,12 @@ def entry_long(symbol):
 def entry_short(symbol):
     try:
         symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
-        quantity = (bUSD_balance * trade_percentage) / (symbol_price * leverage)
+        quantity = (bUSD_balance * trade_percentage) / (symbol_price * TRADE_LVRG)
         order = client.futures_create_order(
             symbol=symbol,
             side=Client.SIDE_SELL,
             type=Client.ORDER_TYPE_MARKET,
-            quantity=quantity)
+            quantity=TRADE_SIZE)
         print(f"Short order created for {quantity} {symbol} at market price.")
         return True
     except BinanceAPIException as e:
@@ -468,6 +469,7 @@ def main():
     global trade_side
     global trade_entry_pnl
     global trade_entry_time
+    global trade_percentage
 
     while True:
         try:
