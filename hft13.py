@@ -580,17 +580,20 @@ def main():
                     percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
                     percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
                     mtf_average = signals['1m']['mtf_average']
-                    close_price = candles[-1]['close']
+                    if len(candles) > 0:
+                        close_price = candles[-1]['close']
+                    else:
+                        close_price = None
 
                     # Check if the signals are strong enough to open a trade
-                    if percent_to_min_val < percent_to_max_val and close_price < mtf_average and not trade_open:
+                    if percent_to_min_val < mtf_average and close_price is not None and close_price < mtf_average and not trade_open:
                         print("BUY signal detected.")
                         if entry_long(TRADE_SYMBOL):
                             trade_open = True
                             trade_side = 'BUY'
                             trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                    elif percent_to_max_val < percent_to_min_val and close_price > mtf_average and not trade_open:
+                    elif percent_to_max_val > percent_to_min_val and close_price is not None and close_price > mtf_average and not trade_open:
                         print("SELL signal detected.")
                         if entry_short(TRADE_SYMBOL):
                             trade_open = True
