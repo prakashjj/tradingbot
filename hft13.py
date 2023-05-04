@@ -497,7 +497,7 @@ def main():
                 print()
 
                 # Check if the percentes to min/max signal keys exist
-                if 'ht_sine_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m']:
+                if 'combined_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m']:
                     percent_to_min_combined = signals['1m']['combined_percent_to_min']
                     percent_to_max_combined = signals['1m']['combined_percent_to_max']
                     percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
@@ -510,7 +510,7 @@ def main():
                     ema_slow = calculate_ema(candles, EMA_SLOW_PERIOD)
                     ema_fast = calculate_ema(candles, EMA_FAST_PERIOD)
 
-                    # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
+                    # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 25 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
                     if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
                         # Place a long trade if not already open
                         if not trade_open:
@@ -563,7 +563,7 @@ def main():
                         else:
                             print("Trade already open. Scanning market to fit exit momentum")
 
-                    # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Max is greater than 90 and greater than the HT Sine Wave Percent to Min and the MTF average is below the close price for a short trade
+                    # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Max is greater than 75 and greater than the HT Sine Wave Percent to Min and the MTF average is below the close price for a short trade
                     elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val > 75 and percent_to_max_val > percent_to_min_val and mtf_average < candles[-1]['close']:
                         # Place a short trade if not already open
                         if not trade_open:
@@ -616,21 +616,23 @@ def main():
                         else:
                             print("Trade already open. Scanning market to fit exit momentum")
 
-                    else:
-                        print("No trade opportunity identified. Scanning market to fit entry momentum")
+                    # Print signal details
+                    print(f"Combined Percent to Min: {percent_to_min_combined}")
+                    print(f"Combined Percent to Max: {percent_to_max_combined}")
+                    print(f"HT Sine Percent to Min: {percent_to_min_val}")
+                    print(f"HT Sine Percent to Max: {percent_to_max_val}")
+                    print(f"Momentum Percent to Min: {percent_to_min_momentum}")
+                    print(f"Momentum Percent to Max: {percent_to_max_momentum}")
+                    print(f"MTF Average: {mtf_average}")
+                    print(f"Fast EMA: {ema_fast[-1]}")
+                    print(f"Slow EMA: {ema_slow[-1]}")
+                    print(f"Close Price: {candles[-1]['close']}")
 
-                else:
-                    print("Signal keys not found in signals dictionary. Waiting for signals.")
-
-            else:
-                print("1m candles not found. Waiting for candles.")
-
-            # Wait for 5 second before checking for new signals
-            time.sleep(5)
+                    # Sleep for a short time to avoid spamming the API
+                    time.sleep(5)
 
         except Exception as e:
-            print("Error occurred. Retrying in 5 seconds.")
-            print(str(e))
+            print("Exception:", str(e))
             time.sleep(5)
             continue
 
