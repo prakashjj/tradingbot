@@ -423,23 +423,15 @@ def get_current_price(symbol):
     ticker = client.futures_symbol_ticker(symbol=symbol)
     return float(ticker['price'])
 
-def get_tick_size(symbol):
-    """Get the tick size for a symbol on Binance Futures."""
-    url = f"https://fapi.binance.com/fapi/v1/exchangeInfo?symbol={symbol}"
-    response = requests.get(url).json()
-    filters = response["symbols"][0]["filters"]
-    for f in filters:
-        if f["filterType"] == "PRICE_FILTER":
-            return float(f["tickSize"])
-
 def get_min_order_quantity(symbol):
-    """Get the minimum order quantity for a symbol on Binance Futures."""
-    url = f"https://fapi.binance.com/fapi/v1/exchangeInfo?symbol={symbol}"
-    response = requests.get(url).json()
-    filters = response["symbols"][0]["filters"]
-    for f in filters:
-        if f["filterType"] == "LOT_SIZE":
-            return float(f["minQty"])
+    try:
+        exchange_info = client.futures_exchange_info()
+        symbol_info = next(filter(lambda x: x['symbol'] == symbol, exchange_info['symbols']))
+        min_qty = float(symbol_info['filters'][2]['minQty'])
+        return min_qty
+    except Exception as e:
+        print(f"Error getting minimum order quantity for {symbol}: {e}")
+        return None
 
 def entry_long(symbol):
     try:
@@ -451,11 +443,7 @@ def entry_long(symbol):
         symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
 
         # Calculate the order quantity as the entire available balance
-        quantity = round((bUSD_balance * TRADE_LVRG) / symbol_price, 6)
-
-        # Adjust the quantity to be a multiple of the tick size
-        tick_size = float(get_tick_size(symbol))
-        quantity -= quantity % tick_size
+        quantity = round((bUSD_balance / symbol_price), 6)
 
         # Check that the resulting quantity meets the minimum order quantity for the asset
         min_quantity = float(get_min_order_quantity(symbol))
@@ -487,11 +475,7 @@ def entry_short(symbol):
         symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
 
         # Calculate the order quantity as the entire available balance
-        quantity = round((bUSD_balance * TRADE_LVRG) / symbol_price, 6)
-
-        # Adjust the quantity to be a multiple of the tick size
-        tick_size = float(get_tick_size(symbol))
-        quantity -= quantity % tick_size
+        quantity = round((bUSD_balance / symbol_price), 6)
 
         # Check that the resulting quantity meets the minimum order quantity for the asset
         min_quantity = float(get_min_order_quantity(symbol))
@@ -596,16 +580,17 @@ def main():
                     percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
                     percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
                     mtf_average = signals['1m']['mtf_average']
+                    close_price = candles[-1]['close']
 
                     # Check if the signals are strong enough to open a trade
-                    if percent_to_min_val > BUY_THRESHOLD and mtf_average > BUY_THRESHOLD and not trade_open:
+                    if percent_to_min_val < percent_to_max_val and close_price < mtf_average and not trade_open:
                         print("BUY signal detected.")
                         if entry_long(TRADE_SYMBOL):
                             trade_open = True
                             trade_side = 'BUY'
                             trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                    elif percent_to_max_val > SELL_THRESHOLD and mtf_average < SELL_THRESHOLD and not trade_open:
+                    elif percent_to_max_val < percent_to_min_val and close_price > mtf_average and not trade_open:
                         print("SELL signal detected.")
                         if entry_short(TRADE_SYMBOL):
                             trade_open = True
@@ -651,15 +636,10 @@ def main():
                             print("Take profit threshold reached. Closing all positions.")
                             exit_trade()
                             trade_open = False
+                            break
 
-            # Wait for 5sec before checking signals again
+            # Wait for the next candle
             time.sleep(5)
-
-        except BinanceAPIException as e:
-            print(e.status_code)
-            print(e.message)
-            time.sleep(5)
-            continue
 
         except Exception as e:
             print(e)
