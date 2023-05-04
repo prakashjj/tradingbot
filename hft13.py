@@ -497,7 +497,7 @@ def main():
                 print()
 
                 # Check if the percentes to min/max signal keys exist
-                if 'combined_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m']:
+                if 'ht_sine_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m']:
                     percent_to_min_combined = signals['1m']['combined_percent_to_min']
                     percent_to_max_combined = signals['1m']['combined_percent_to_max']
                     percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
