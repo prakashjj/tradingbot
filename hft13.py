@@ -489,9 +489,13 @@ def main():
             # Get the MTF signal
             signals = get_mtf_signal_v2(candles, timeframes, percent_to_min=1, percent_to_max=1)
 
+            print()
+
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
                 print(signals)
+                print()
+
                 # Check if the combined percent to min/max signal keys exist
                 if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m']:
                     percent_to_min_combined = signals['1m']['combined_percent_to_min']
