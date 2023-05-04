@@ -312,7 +312,7 @@ def forecast_price(candles, timeframes, mtf_signal):
         target_price = norm_sine[-1] + (target_percent/100) * (max_sine - min_sine)
     else:
         target_price = close
-    target_price += 1000  # add 1000 to the target price
+    #target_price += 1000  # add 1000 to the target price
     return round(target_price, 2)
 
 forecast = forecast_price(candles, timeframes, mtf_signal)
@@ -567,6 +567,11 @@ def main():
             # Define the candles and timeframes to use for the signals
             candles = get_historical_candles(TRADE_SYMBOL, start_time, end_time, '1m')
             timeframes = ['1m', '3m', '5m']
+            print(candles)
+
+            # Check if candles is empty
+            if not candles:
+                print("Error: No historical candles found.")
 
             # Get the MTF signal
             signals = get_mtf_signal_v2(candles, timeframes, percent_to_min=1, percent_to_max=1)
@@ -585,7 +590,8 @@ def main():
                     percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
                     percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
                     mtf_average = signals['1m']['mtf_average']
-                    close_price = candles[-1]['close']
+                    last_candle = candles['1m'][-1]
+                    close_price = last_candle['close']
 
                     print("Close price:", close_price)
                     print("MTF average:", mtf_average)
