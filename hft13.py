@@ -32,7 +32,7 @@ def get_account_balance():
             return bUSD_balance
 
 # Get the USDT balance of the futures account
-bUSD_balance = get_account_balance()
+bUSD_balance = float(get_account_balance())
 
 # Calculate the trade size based on the USDT balance with 20x leverage
 TRADE_SIZE = bUSD_balance * 20
@@ -546,8 +546,6 @@ def main():
             if account_balance == 0:
                 print("Balance is zero. Exiting program.")
                 break
-            else:
-                print(account_balance)
 
             # Define start and end time for historical data
             start_time = int(time.time()) - (1800 * 4)  # 60-minute interval (4 candles)
@@ -562,9 +560,6 @@ def main():
 
             print()
 
-            # Get the latest close price from the candles
-            current_price = candles[-1]['close']
-
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
                 print(signals)
@@ -577,14 +572,14 @@ def main():
                     mtf_average = signals['1m']['mtf_average']
 
                     # Check if the signals are strong enough to open a trade
-                    if (current_price < mtf_average) and (percent_to_min_val < percent_to_max_val) and (percent_to_min_val < 15) and not trade_open:
+                    if percent_to_min_val > BUY_THRESHOLD and mtf_average > BUY_THRESHOLD and not trade_open:
                         print("BUY signal detected.")
                         if entry_long(TRADE_SYMBOL):
                             trade_open = True
                             trade_side = 'BUY'
                             trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                    elif (current_price > mtf_average) and (percent_to_max_val < percent_to_min_val) and (percent_to_max_val < 15) and not trade_open:
+                    elif percent_to_max_val > SELL_THRESHOLD and mtf_average < SELL_THRESHOLD and not trade_open:
                         print("SELL signal detected.")
                         if entry_short(TRADE_SYMBOL):
                             trade_open = True
@@ -630,12 +625,18 @@ def main():
                             print("Take profit threshold reached. Closing all positions.")
                             exit_trade()
                             trade_open = False
-                            break
 
+            # Wait for 5sec before checking signals again
             time.sleep(5)
 
+        except BinanceAPIException as e:
+            print(e.status_code)
+            print(e.message)
+            time.sleep(5)
+            continue
+
         except Exception as e:
-            print("Exception:", str(e))
+            print(e)
             time.sleep(5)
             continue
 
