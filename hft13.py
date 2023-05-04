@@ -517,8 +517,47 @@ def main():
                             trade_exit_pnl = 0
                             trade_entry_time = int(time.time())
                             print(f"Entered long trade at {trade_entry_time}.")
+
+                        # Check if the trade has exceeded the stop loss threshold
+                        elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
+                            # Exit the trade
+                            exit_trade(TRADE_SYMBOL, trade_side)
+                            trade_open = False
+                            trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            print(f"Exited trade at stop loss threshold {int(time.time())}")
+
+                            # Enter a new trade with reversed side
+                            if trade_side == 'long':
+                                entry_short(TRADE_SYMBOL)
+                                trade_side = 'short'
+                            elif trade_side == 'short':
+                                entry_long(TRADE_SYMBOL)
+                                trade_side = 'long'
+
+                            # Reset trade variables
+                            trade_open = True
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+
+                        # Check if the trade has exceeded the take profit threshold
+                        elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
+                            # Exit the trade
+                            exit_trade(TRADE_SYMBOL, trade_side)
+                            trade_open = False
+                            trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            print(f"Exited trade at take profit threshold {int(time.time())}")
+
+                            # Reset trade variables
+                            trade_open = True
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+
+                            break
+
                         else:
-                            print("Trade already open.")
+                            print("Trade already open. Sacanning market to fit exit momentum")
 
                     # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
                     elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val < 25 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
@@ -531,24 +570,47 @@ def main():
                             trade_exit_pnl = 0
                             trade_entry_time = int(time.time())
                             print(f"Entered short trade at {trade_entry_time}.")
+
+                        # Check if the trade has exceeded the stop loss threshold
+                        elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
+                            # Exit the trade
+                            exit_trade(TRADE_SYMBOL, trade_side)
+                            trade_open = False
+                            trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            print(f"Exited trade at stop loss threshold {int(time.time())}")
+
+                            # Enter a new trade with reversed side
+                            if trade_side == 'long':
+                                entry_short(TRADE_SYMBOL)
+                                trade_side = 'short'
+                            elif trade_side == 'short':
+                                entry_long(TRADE_SYMBOL)
+                                trade_side = 'long'
+
+                            # Reset trade variables
+                            trade_open = True
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+
+                        # Check if the trade has exceeded the take profit threshold
+                        elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
+                            # Exit the trade
+                            exit_trade(TRADE_SYMBOL, trade_side)
+                            trade_open = False
+                            trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            print(f"Exited trade at take profit threshold {int(time.time())}")
+
+                            # Reset trade variables
+                            trade_open = True
+                            trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
+                            trade_exit_pnl = 0
+                            trade_entry_time = int(time.time())
+
+                            break
+
                         else:
-                            print("Trade already open.")
-
-                    # Check if the trade has exceeded the stop loss threshold
-                    if trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= STOP_LOSS_THRESHOLD:
-                        # Exit the trade
-                        exit_trade()
-                        trade_open = False
-                        trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        print(f"Exited trade at stop loss threshold {int(time.time())}.")
-
-                    # Check if the trade has exceeded the take profit threshold
-                    elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
-                        # Exit the trade
-                        exit_trade()
-                        trade_open = False
-                        trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        print(f"Exited trade at take profit threshold {int(time.time())}.")
+                            print("Trade already open. Sacanning market to fit exit momentum")
 
                     # Print the signal values for debugging purposes
                     print(f"HT Sine Wave Percent to Min: {percent_to_min_val}, HT Sine Wave Percent to Max: {percent_to_max_val}, Momentum Percent to Min: {percent_to_min_momentum}, Momentum Percent to Max: {percent_to_max_momentum}")
