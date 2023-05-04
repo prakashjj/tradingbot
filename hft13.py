@@ -423,32 +423,54 @@ def get_current_price(symbol):
     ticker = client.futures_symbol_ticker(symbol=symbol)
     return float(ticker['price'])
 
+def get_tick_size(symbol):
+    """Get the tick size for a symbol on Binance Futures."""
+    url = f"https://fapi.binance.com/fapi/v1/exchangeInfo?symbol={symbol}"
+    response = requests.get(url).json()
+    filters = response["symbols"][0]["filters"]
+    for f in filters:
+        if f["filterType"] == "PRICE_FILTER":
+            return float(f["tickSize"])
+
+def get_min_order_quantity(symbol):
+    """Get the minimum order quantity for a symbol on Binance Futures."""
+    url = f"https://fapi.binance.com/fapi/v1/exchangeInfo?symbol={symbol}"
+    response = requests.get(url).json()
+    filters = response["symbols"][0]["filters"]
+    for f in filters:
+        if f["filterType"] == "LOT_SIZE":
+            return float(f["minQty"])
+
 def entry_long(symbol):
     try:
         # Get the available account balance and set the leverage to 20x
         bUSD_balance = float(get_account_balance())
-        leverage = 20
+        TRADE_LVRG = 20
 
         # Calculate the maximum order quantity based on the current price
-        symbol_price = float(get_current_price(symbol))
-        max_quantity = round((bUSD_balance * leverage) / symbol_price, 6)
+        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
 
-        # Calculate the fee for the order
-        fee = round(bUSD_balance * 0.0004, 6)
+        # Calculate the order quantity as the entire available balance
+        quantity = round((bUSD_balance * TRADE_LVRG) / symbol_price, 6)
 
-        # Calculate the order quantity to use the entire bUSD balance after accounting for the fee
-        quantity = round((bUSD_balance - fee) / symbol_price, 6)
+        # Adjust the quantity to be a multiple of the tick size
+        tick_size = float(get_tick_size(symbol))
+        quantity -= quantity % tick_size
 
-        # Create the long order
+        # Check that the resulting quantity meets the minimum order quantity for the asset
+        min_quantity = float(get_min_order_quantity(symbol))
+        if quantity < min_quantity:
+            print(f"Order quantity is less than the minimum quantity: {quantity} < {min_quantity}")
+            return False
+
+        # Create the long order at market price
         order = client.futures_create_order(
             symbol=symbol,
             side=client.SIDE_BUY,
             type=client.ORDER_TYPE_MARKET,
-            quantity=quantity,
-            reduceOnly=True,
-            timeInForce='GTC')
+            quantity=quantity)
 
-        print(f"Long order created for {quantity} {symbol} at market price with {leverage}x leverage.")
+        print(f"Long order created for {quantity} {symbol} at market price.")
         return True
 
     except BinanceAPIException as e:
@@ -459,28 +481,32 @@ def entry_short(symbol):
     try:
         # Get the available account balance and set the leverage to 20x
         bUSD_balance = float(get_account_balance())
-        leverage = 20
+        TRADE_LVRG = 20
 
         # Calculate the maximum order quantity based on the current price
-        symbol_price = float(get_current_price(symbol))
-        max_quantity = round((bUSD_balance * leverage) / symbol_price, 6)
+        symbol_price = float(client.futures_symbol_ticker(symbol=symbol)['price'])
 
-        # Calculate the fee for the order
-        fee = round(bUSD_balance * 0.0004, 6)
+        # Calculate the order quantity as the entire available balance
+        quantity = round((bUSD_balance * TRADE_LVRG) / symbol_price, 6)
 
-        # Calculate the order quantity to use the entire bUSD balance after accounting for the fee
-        quantity = round((bUSD_balance - fee) / symbol_price, 6)
+        # Adjust the quantity to be a multiple of the tick size
+        tick_size = float(get_tick_size(symbol))
+        quantity -= quantity % tick_size
 
-        # Create the short order
+        # Check that the resulting quantity meets the minimum order quantity for the asset
+        min_quantity = float(get_min_order_quantity(symbol))
+        if quantity < min_quantity:
+            print(f"Order quantity is less than the minimum quantity: {quantity} < {min_quantity}")
+            return False
+
+        # Create the short order at market price
         order = client.futures_create_order(
             symbol=symbol,
             side=client.SIDE_SELL,
             type=client.ORDER_TYPE_MARKET,
-            quantity=quantity,
-            reduceOnly=True,
-            timeInForce='GTC')
+            quantity=quantity)
 
-        print(f"Short order created for {quantity} {symbol} at market price with {leverage}x leverage.")
+        print(f"Short order created for {quantity} {symbol} at market price.")
         return True
 
     except BinanceAPIException as e:
