@@ -108,7 +108,7 @@ closed_positions = []
 def get_historical_candles(symbol, start_time, end_time, timeframe):
     candles = client.futures_klines(symbol=symbol, interval=timeframe, startTime=start_time * 1000, endTime=end_time * 1000)
     candles_by_timeframe = {}
-    for tf in ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '1w']:
+    for tf in ['1m', '3m', '5m']:
         candles_by_timeframe[tf] = [ {'open': float(candle[1]), 'high': float(candle[2]), 'low': float(candle[3]), 'close': float(candle[4]), 'volume': float(candle[5])} for candle in candles ]
     return candles_by_timeframe
 
