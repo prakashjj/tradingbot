@@ -450,9 +450,8 @@ def calculate_ema(candles, period):
         ema.append((price - ema[-1]) * multiplier + ema[-1])
     return ema
 
-
 def main():
-    # Variables
+    # Global variables
     global closed_positions
     global TRADE_SYMBOL
     global TRADE_TYPE
@@ -492,6 +491,7 @@ def main():
 
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
+                print(signals)
                 # Check if the combined percent to min/max signal keys exist
                 if 'combined_percent_to_min' in signals['1m'] and 'combined_percent_to_max' in signals['1m']:
                     percent_to_min_combined = signals['1m']['combined_percent_to_min']
@@ -508,7 +508,7 @@ def main():
 
                     # Check if the price closes below the fast EMA and the fast EMA is below the slow EMA and the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price for a long trade
                     if candles[-1]['close'] < ema_fast[-1] and ema_fast[-1] < ema_slow[-1] and percent_to_min_val < 25 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close']:
-                        # Place a long trade
+                        # Place a long trade if not already open
                         if not trade_open:
                             entry_long(TRADE_SYMBOL)
                             trade_open = True
@@ -516,13 +516,13 @@ def main():
                             trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                             trade_exit_pnl = 0
                             trade_entry_time = int(time.time())
-                            print(f"Entered long trade at {trade_entry_time}")
+                            print(f"Entered long trade at {trade_entry_time}.")
                         else:
                             print("Trade already open.")
 
                     # Check if the price closes above the fast EMA and the fast EMA is above the slow EMA and the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price for a short trade
                     elif candles[-1]['close'] > ema_fast[-1] and ema_fast[-1] > ema_slow[-1] and percent_to_max_val < 25 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close']:
-                        # Place a short trade
+                        # Place a short trade if not already open
                         if not trade_open:
                             entry_short(TRADE_SYMBOL)
                             trade_open = True
@@ -530,7 +530,7 @@ def main():
                             trade_entry_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
                             trade_exit_pnl = 0
                             trade_entry_time = int(time.time())
-                            print(f"Entered short trade at {trade_entry_time}")
+                            print(f"Entered short trade at {trade_entry_time}.")
                         else:
                             print("Trade already open.")
 
@@ -540,7 +540,7 @@ def main():
                         exit_trade()
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        print(f"Exited trade at stop loss threshold {int(time.time())}")
+                        print(f"Exited trade at stop loss threshold {int(time.time())}.")
 
                     # Check if the trade has exceeded the take profit threshold
                     elif trade_open and abs(float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])) >= TAKE_PROFIT_THRESHOLD:
@@ -548,7 +548,7 @@ def main():
                         exit_trade()
                         trade_open = False
                         trade_exit_pnl = float(client.futures_position_information(symbol=TRADE_SYMBOL)[0]['unRealizedProfit'])
-                        print(f"Exited trade at take profit threshold {int(time.time())}")
+                        print(f"Exited trade at take profit threshold {int(time.time())}.")
 
                     # Print the signal values for debugging purposes
                     print(f"HT Sine Wave Percent to Min: {percent_to_min_val}, HT Sine Wave Percent to Max: {percent_to_max_val}, Momentum Percent to Min: {percent_to_min_momentum}, Momentum Percent to Max: {percent_to_max_momentum}")
