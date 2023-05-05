@@ -532,6 +532,9 @@ def calculate_ema(candles, period):
         ema.append((price - ema[-1]) * multiplier + ema[-1])
     return ema
 
+import talib
+import numpy as np
+
 def main():
     global closed_positions
     global TRADE_SYMBOL
@@ -567,25 +570,30 @@ def main():
             # Define the candles and timeframes to use for the signals
             candles = get_historical_candles(TRADE_SYMBOL, start_time, end_time, '1m')
             timeframes = ['1m', '3m', '5m']
-            #print(candles)
-
             # Check if candles is empty
             if not candles:
                 print("Error: No historical candles found.")
 
+            # Add a new Talib HT_SINE with a distance between min of sine and max of sine of 30 minutes using 1-minute timeframe data
+            ht_sine_min, ht_sine_max = talib.HT_SINE(candles['1m']['close'])
+            ht_sine_percent_to_min_30 = (candles['1m']['close'][-1] - ht_sine_min[-30]) / ht_sine_min[-30] * 100
+            ht_sine_percent_to_max_30 = (ht_sine_max[-30] - candles['1m']['close'][-1]) / ht_sine_max[-30] * 100
+            ht_sine_mtf_average_30 = np.mean([ht_sine_min[-30], ht_sine_max[-30]])
+
+            # Fit the results to the new sine
+            ht_sine_percent_to_min_30 = (ht_sine_percent_to_min_30 - (-100)) / (100 - (-100)) * (2) - 1
+            ht_sine_percent_to_max_30 = (ht_sine_percent_to_max_30 - (-100)) / (100 - (-100)) * (2) - 1
+            ht_sine_mtf_average_30 = (ht_sine_mtf_average_30 - np.min(candles['1m']['close'])) / (np.max(candles['1m']['close']) - np.min(candles['1m']['close'])) * (2) - 1
+
             # Get the MTF signal
             signals = get_mtf_signal_v2(candles, timeframes, percent_to_min=1, percent_to_max=1)
-
-            print()
 
             # Check if the '1m' key exists in the signals dictionary
             if '1m' in signals:
                 print(signals)
-                print()
 
                 # Check if the percent to min/max signal keys exist in the '1m' dictionary
                 if 'ht_sine_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m']:
-                    print("Reached the '1m' signals check.")
 
                     percent_to_min_val = signals['1m']['ht_sine_percent_to_min']
                     percent_to_max_val = signals['1m']['ht_sine_percent_to_max']
@@ -597,38 +605,25 @@ def main():
                     print("MTF average:", mtf_average)
                     print("Percent to min:", percent_to_min_val)
                     print("Percent to max:", percent_to_max_val)
+                    print("HT_SINE_percent_to_min_30:", ht_sine_percent_to_min_30)
+                    print("HT_SINE_percent_to_max_30:", ht_sine_percent_to_max_30)
+                    print("HT_SINE_mtf_average_30:", ht_sine_mtf_average_30)
 
-                    # Check if the signals are strong enough to open a trade
-                    if percent_to_min_val < percent_to_max_val and close_price < mtf_average and not trade_open:
-                        print("BUY signal detected.")
-                        if entry_long(TRADE_SYMBOL):
-                            trade_open = True
-                            trade_side = 'BUY'
-                            trade_entry_pnl = 0
-                            trade_entry_time = int(time.time())
-                    elif percent_to_max_val < percent_to_min_val and close_price > mtf_average and not trade_open:
-                        print("SELL signal detected.")
-                        if entry_short(TRADE_SYMBOL):
-                            trade_open = True
-                            trade_side = 'SELL'
-                            trade_entry_pnl = 0
-                            trade_entry_time = int(time.time())
-                    
                     # Check if the new HT_SINE signal is strong enough to open a trade
-                    if signals['1m']['ht_sine_percent_to_min_30'] < signals['1m']['ht_sine_percent_to_max_30'] and close_price < signals['1m']['ht_sine_mtf_average_30'] and not trade_open:
+                    if ht_sine_percent_to_min_30 > 0 and ht_sine_percent_to_max_30 < 0 and close_price < ht_sine_mtf_average_30 and not trade_open:
                         print("BUY signal detected (30 min).")
                         if entry_long(TRADE_SYMBOL):
                             trade_open = True
                             trade_side = 'BUY'
                             trade_entry_pnl = 0
                             trade_entry_time = int(time.time())
-                    elif signals['1m']['ht_sine_percent_to_max_30'] < signals['1m']['ht_sine_percent_to_min_30'] and close_price > signals['1m']['ht_sine_mtf_average_30'] and not trade_open:
+                    elif ht_sine_percent_to_max_30 > 0 and ht_sine_percent_to_min_30 < 0 and close_price > ht_sine_mtf_average_30 and not trade_open:
                         print("SELL signal detected (30 min).")
                         if entry_short(TRADE_SYMBOL):
                             trade_open = True
                             trade_side = 'SELL'
                             trade_entry_pnl = 0
-                            trade_entry_time = int(time.time()))
+                            trade_entry_time = int(time.time())
 
                 # Check if the trade is open
                 if trade_open:
@@ -645,12 +640,17 @@ def main():
                                 trade_entry_time = int(time.time())
                             else:
                                 trade_open = False
-                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': current_pnl})
                         elif current_pnl >= (account_balance * TAKE_PROFIT_THRESHOLD):
-                            print("Take profit threshold reached. Closing all positions.")
+                            print("Take profit threshold reached. Exiting trade.")
                             exit_trade()
                             trade_open = False
-                            break
+                        else:
+                            # Check if the trade should be closed based on the EMA crossing
+                            if signals['1m']['ema_fast'] < signals['1m']['ema_slow']:
+                                print("EMA cross detected. Exiting trade.")
+                                exit_trade()
+                                trade_open = False
+
                     elif trade_side == 'SELL':
                         current_pnl = get_current_pnl(TRADE_SYMBOL, trade_entry_pnl, trade_side)
                         if current_pnl <= (account_balance * -STOP_LOSS_THRESHOLD):
@@ -663,20 +663,25 @@ def main():
                                 trade_entry_time = int(time.time())
                             else:
                                 trade_open = False
-                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': current_pnl})
                         elif current_pnl >= (account_balance * TAKE_PROFIT_THRESHOLD):
-                            print("Take profit threshold reached. Closing all positions.")
+                            print("Take profit threshold reached. Exiting trade.")
                             exit_trade()
                             trade_open = False
-                            break
+                        else:
+                            # Check if the trade should be closed based on the EMA crossing
+                            if signals['1m']['ema_fast'] > signals['1m']['ema_slow']:
+                                print("EMA cross detected. Exiting trade.")
+                                exit_trade()
+                                trade_open = False
 
-            # Wait for the next candle
+            # Sleep for 5sec before moving on to the next iteration of the loop
             time.sleep(5)
 
         except Exception as e:
-            print(e)
+            print("Error:", str(e))
             time.sleep(5)
             continue
+
 
 # Run the main function
 if __name__ == '__main__':
