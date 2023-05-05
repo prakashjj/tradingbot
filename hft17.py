@@ -601,58 +601,9 @@ def main():
                     # Check if the signals are strong enough to open a trade
                     if percent_to_min_val < percent_to_max_val and close_price < mtf_average and not trade_open:
                         print("BUY signal detected.")
-                        if entry_long(TRADE_SYMBOL):
-                            trade_open = True
-                            trade_side = 'BUY'
-                            trade_entry_pnl = 0
-                            trade_entry_time = int(time.time())
+
                     elif percent_to_max_val < percent_to_min_val and close_price > mtf_average and not trade_open:
                         print("SELL signal detected.")
-                        if entry_short(TRADE_SYMBOL):
-                            trade_open = True
-                            trade_side = 'SELL'
-                            trade_entry_pnl = 0
-                            trade_entry_time = int(time.time())
-
-                # Check if the trade is open
-                if trade_open:
-                    # Check if stop loss or take profit thresholds have been reached
-                    if trade_side == 'BUY':
-                        current_pnl = get_current_pnl(TRADE_SYMBOL, trade_entry_pnl, trade_side)
-                        if current_pnl <= (account_balance * -STOP_LOSS_THRESHOLD):
-                            print("Stop loss threshold reached. Reversing trade.")
-                            exit_trade()
-                            trade_side = 'SELL'
-                            if entry_short(TRADE_SYMBOL):
-                                trade_open = True
-                                trade_entry_pnl = 0
-                                trade_entry_time = int(time.time())
-                            else:
-                                trade_open = False
-                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': current_pnl})
-                        elif current_pnl >= (account_balance * TAKE_PROFIT_THRESHOLD):
-                            print("Take profit threshold reached. Closing all positions.")
-                            exit_trade()
-                            trade_open = False
-                            break
-                    elif trade_side == 'SELL':
-                        current_pnl = get_current_pnl(TRADE_SYMBOL, trade_entry_pnl, trade_side)
-                        if current_pnl <= (account_balance * -STOP_LOSS_THRESHOLD):
-                            print("Stop loss threshold reached. Reversing trade.")
-                            exit_trade()
-                            trade_side = 'BUY'
-                            if entry_long(TRADE_SYMBOL):
-                                trade_open = True
-                                trade_entry_pnl = 0
-                                trade_entry_time = int(time.time())
-                            else:
-                                trade_open = False
-                                closed_positions.append({'entry_time': trade_entry_time, 'exit_time': int(time.time()), 'pnl': current_pnl})
-                        elif current_pnl >= (account_balance * TAKE_PROFIT_THRESHOLD):
-                            print("Take profit threshold reached. Closing all positions.")
-                            exit_trade()
-                            trade_open = False
-                            break
 
             # Wait for the next candle
             time.sleep(5)
