@@ -613,8 +613,10 @@ def main():
                 em_freqs = np.fft.fftfreq(len(em_field))
                 em_period = 1 / np.abs(em_freqs[np.argmax(em_amp)])
                 last_candle = candles['1m']['close'][-1]
+
                 forecast_price = last_candle + em_field[int(em_period/60):int(15*60/em_period)].sum()
-                signals['1m']['forecast_price'] = forecast_price
+                forecast_price_list = forecast_price.tolist()
+                signals['1m']['forecast_price'] = forecast_price_list
 
                 # Determine the market mood and frequency of the current cycle spectrum
                 market_fft = np.fft.fft(candles['1m']['close'])
