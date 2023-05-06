@@ -595,18 +595,22 @@ def main():
             # Calculate the EMAs for the 1m timeframe
             if '1m' in candles:
                 close_prices = np.asarray(candles['1m']['close'])
-                ema_slow = talib.EMA(close_prices, timeperiod=EMA_SLOW_PERIOD)
-                ema_fast = talib.EMA(close_prices, timeperiod=EMA_FAST_PERIOD)
-                signals['1m'] = {'ema_slow': ema_slow[-1], 'ema_fast': ema_fast[-1]}
+                ema_slow = talib.EMA(close_prices, timeperiod=EMA_SLOW_PERIOD)[-1]
+                ema_fast = talib.EMA(close_prices, timeperiod=EMA_FAST_PERIOD)[-1]
+                signals['1m'] = {'ema_slow': ema_slow, 'ema_fast': ema_fast}
 
             # Calculate the HT_SINE for the 1m timeframe with a period of 30
             if '1m' in candles:
                 close_prices = np.asarray(candles['1m']['close'])
                 ht_sine_period = 30
                 ht_sine = talib.HT_SINE(close_prices)
-                ht_sine = np.ravel(ht_sine)
+                ht_sine = np.asarray(ht_sine)
+                ht_sine = ht_sine.astype(int)
+                ht_sine = ht_sine[~np.isnan(ht_sine)]
+                if len(ht_sine) == 0:
+                    continue
                 ht_sine_wave_length = ht_sine_period * 60
-                signals['1m']['ht_sine'] = np.asarray(ht_sine).tolist()
+                signals['1m']['ht_sine'] = ht_sine.tolist()
 
                 # Calculate the percent to min/max values for the HT_SINE
                 ht_sine_min = np.min(ht_sine)
@@ -635,10 +639,10 @@ def main():
 
             # Check for buy/sell signals
             if '1m' in signals:
-                if 'ht_sine_percent_to_min' in signals['1m'] and signals['1m'].get('ht_sine_percent_to_min', 0) > BUY_THRESHOLD:
+                if 'ht_sine_percent_to_min' in signals['1m'] and signals['1m']['ht_sine_percent_to_min'] > BUY_THRESHOLD:
                     print("Buy Signal Detected")
                     # Place buy order here
-                elif 'ht_sine_percent_to_max' in signals['1m'] and signals['1m'].get('ht_sine_percent_to_max', 0) > SELL_THRESHOLD:
+                elif 'ht_sine_percent_to_max' in signals['1m'] and signals['1m']['ht_sine_percent_to_max'] > SELL_THRESHOLD:
                     print("Sell Signal Detected")
                     # Place sell order here
 
