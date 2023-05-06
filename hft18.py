@@ -541,7 +541,6 @@ def main():
     global TRADE_SYMBOL
     global EMA_SLOW_PERIOD
     global EMA_FAST_PERIOD
-    global trade_open
 
     print("Starting main loop...")
 
@@ -562,6 +561,7 @@ def main():
                     str(end_time * 1000),
                     1000
                 )
+
                 if data:
                     candles[tf] = {
                         'timestamp': [candle[0] for candle in data],
@@ -581,8 +581,8 @@ def main():
                 close_prices = np.asarray(candles['1m']['close'])
                 ema_slow = talib.EMA(close_prices, timeperiod=EMA_SLOW_PERIOD)
                 ema_fast = talib.EMA(close_prices, timeperiod=EMA_FAST_PERIOD)
-                signals['1m']['ema_slow'] = ema_slow.tolist()
-                signals['1m']['ema_fast'] = ema_fast.tolist()
+                signals['1m']['ema_slow'] = ema_slow.item()
+                signals['1m']['ema_fast'] = ema_fast.item()
 
             # Calculate the HT_SINE for the 1m timeframe with a period of 30
             if '1m' in candles:
@@ -635,8 +635,6 @@ def main():
 
                 # Check if the ema_slow and ema_fast signal keys exist in the '1m' dictionary
                 if 'ema_slow' in signals['1m'] and 'ema_fast' in signals['1m'] and 'ht_sine_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m'] and 'em_amp' in signals['1m'] and 'em_phase' in signals['1m']:
-                    print("Reached the '1m' signals check.")
-
                     ema_slow = signals['1m']['ema_slow']
                     ema_fast = signals['1m']['ema_fast']
                     ht_sine_percent_to_min = signals['1m']['ht_sine_percent_to_min']
@@ -646,19 +644,18 @@ def main():
                     close_price = last_candle
 
                     # Create new buy and sell conditions based on the EMA crossovers and threshold values
-                    if ema_fast[-1] > ema_slow[-1] and ema_fast[-2] <= ema_slow[-2] and not trade_open and close_price < BUY_THRESHOLD and ht_sine_percent_to_min < ht_sine_percent_to_max and em_amp > 0.5 and em_phase[-1] < em_phase[-2]:
-                        print("BUY signal detected.")
+                    if ema_fast > ema_slow and close_price < BUY_THRESHOLD and ht_sine_percent_to_min < ht_sine_percent_to_max and em_amp > 0.5 and em_phase[-1] < em_phase[-2]:
+                        print("Entry Long signal detected.")
 
-                    elif ema_fast[-1] < ema_slow[-1] and ema_fast[-2] >= ema_slow[-2] and not trade_open and close_price > SELL_THRESHOLD and ht_sine_percent_to_max < ht_sine_percent_to_min and em_amp > 0.5 and em_phase[-1] > em_phase[-2]:
-                        print("SELL signal detected.")
-
-            # Wait for the next candle
-            time.sleep(5)
+                    elif ema_fast < ema_slow and close_price > SELL_THRESHOLD and ht_sine_percent_to_max < ht_sine_percent_to_min and em_amp > 0.5 and em_phase[-1] > em_phase[-2]:
+                        print("Entry Short signal detected.")
 
         except Exception as e:
-            print(e)
-            time.sleep(5)
-            continue
+            print("Error in main loop:", e)
+
+        # Sleep for 5sec before checking again
+        time.sleep(5)
+
 
 # Run the main function
 if __name__ == '__main__':
