@@ -11,7 +11,7 @@ import decimal
 
 # binance module imports
 from binance.client import Client as BinanceClient
-from binance.exceptions import BinanceAPIException, BinanceOrderException
+from binance.exceptions import BinanceAPIException, BinanceOrderException, BinanceRequestException
 from binance.enums import *
 
 # Load credentials from file
@@ -38,7 +38,7 @@ bUSD_balance = float(get_account_balance())
 TRADE_SIZE = bUSD_balance * 20
 
 # Global variables
-TRADE_SYMBOL = 'BTCUSDT'
+TRADE_SYMBOL = 'BTCBUSD'
 TRADE_TYPE = 'LONG'
 TRADE_LVRG = 20
 STOP_LOSS_THRESHOLD = 0.0112 # define 1.12% for stoploss
@@ -312,7 +312,7 @@ def forecast_price(candles, timeframes, mtf_signal):
         target_price = norm_sine[-1] + (target_percent/100) * (max_sine - min_sine)
     else:
         target_price = close
-    #target_price += 1000  # add 1000 to the target price
+    target_price += 1000  # add 1000 to the target price
     return round(target_price, 2)
 
 forecast = forecast_price(candles, timeframes, mtf_signal)
@@ -538,17 +538,29 @@ def calculate_ema(candles, period):
     return ema
 
 def main():
+    global closed_positions
     global TRADE_SYMBOL
-    global EMA_SLOW_PERIOD
-    global EMA_FAST_PERIOD
+    global TRADE_TYPE
+    global TRADE_LVRG
+    global STOP_LOSS_THRESHOLD
+    global TAKE_PROFIT_THRESHOLD
     global BUY_THRESHOLD
     global SELL_THRESHOLD
+    global EMA_SLOW_PERIOD
+    global EMA_FAST_PERIOD
+    global trade_open
+    global trade_side
+    global trade_entry_pnl
+    global trade_entry_time
+    global trade_percentage
     global signals
+    global client
 
     print("Starting main loop...")
 
     while True:
         print("Looping...")
+
         try:
             # Define start and end time for historical data
             start_time = int(time.time()) - (1800 * 4)  # 60-minute interval (4 candles)
@@ -589,8 +601,12 @@ def main():
 
             # Calculate the HT_SINE for the 1m timeframe with a period of 30
             if '1m' in candles:
-                ht_sine = talib.HT_SINE(candles['1m']['close'], timeperiod=30)
-                signals['1m']['ht_sine'] = ht_sine.tolist()
+                close_prices = np.asarray(candles['1m']['close'])
+                ht_sine_period = 30
+                ht_sine = talib.HT_SINE(close_prices)
+                ht_sine = np.ravel(ht_sine)
+                ht_sine_wave_length = ht_sine_period * 60
+                signals['1m']['ht_sine'] = np.asarray(ht_sine).tolist()
 
                 # Calculate the percent to min/max values for the HT_SINE
                 ht_sine_min = np.min(ht_sine)
@@ -601,65 +617,40 @@ def main():
                 signals['1m']['ht_sine_percent_to_max'] = ht_sine_percent_to_max
 
                 # Calculate the EM field for the HT_SINE
-                freqs = np.linspace(0, 1/30, len(ht_sine))
+                freqs = np.linspace(0, 1/ht_sine_wave_length, len(ht_sine))
                 em_field = np.sum(np.sin(2*np.pi*freqs*ht_sine), axis=0)
+                em_field = np.atleast_1d(em_field)  # make sure em_field is a 1D array
                 signals['1m']['em_field'] = em_field.tolist()
 
                 # Calculate the amplitude and phase of the EM field
                 em_fft = np.fft.fft(em_field)
-                em_amp = 2 * np.abs(em_fft) / len(em_fft)
-                em_phase = np.angle(em_fft)
-                signals['1m']['em_amp'] = em_amp.tolist()
-                signals['1m']['em_phase'] = em_phase.tolist()
+                if len(em_fft) > 0:
+                    em_amp = 2*np.abs(em_fft)/len(em_fft)
+                    em_phase = np.angle(em_fft)
+                    signals['1m']['em_amp'] = em_amp.tolist()
+                    signals['1m']['em_phase'] = em_phase.tolist()
 
-                # Calculate the forecast price for the next 15 minutes based on the EM field
-                em_freqs = np.fft.fftfreq(len(em_field))
-                em_period = 1 / np.abs(em_freqs[np.argmax(em_amp)])
-                last_candle = candles['1m']['close'][-1]
+            # Print signals for debugging
+            print(signals)
 
-                forecast_price = last_candle + em_field[int(em_period/60):int(15*60/em_period)].sum()
-                forecast_price_list = forecast_price.tolist()
-                forecast_price_float = forecast_price
-                signals['1m']['forecast_price'] = forecast_price_list
-
-                # Determine the market mood and frequency of the current cycle spectrum
-                market_fft = np.fft.fft(candles['1m']['close'])
-                market_amp = 2 * np.abs(market_fft) / len(market_fft)
-                market_phase = np.angle(market_fft)
-                market_freqs = np.fft.fftfreq(len(candles['1m']['close']))
-                cycle_period = 1 / np.abs(market_freqs[np.argmax(market_amp)])
-                cycle_spectrum = np.sum(market_amp[np.abs(market_freqs) < 1/cycle_period])
-                signals['1m']['cycle_period'] = cycle_period
-                signals['1m']['cycle_spectrum'] = cycle_spectrum
-
-            # Check if the '1m' key exists in the signals dictionary
+            # Check for buy/sell signals
             if '1m' in signals:
-                print(signals)
-                print()
+                if 'ht_sine_percent_to_min' in signals['1m'] and signals['1m'].get('ht_sine_percent_to_min', 0) > BUY_THRESHOLD:
+                    print("Buy Signal Detected")
+                    # Place buy order here
+                elif 'ht_sine_percent_to_max' in signals['1m'] and signals['1m'].get('ht_sine_percent_to_max', 0) > SELL_THRESHOLD:
+                    print("Sell Signal Detected")
+                    # Place sell order here
 
-                # Check if the ema_slow and ema_fast signal keys exist in the '1m' dictionary
-                if 'ema_slow' in signals['1m'] and 'ema_fast' in signals['1m'] and 'ht_sine_percent_to_min' in signals['1m'] and 'ht_sine_percent_to_max' in signals['1m'] and 'em_amp' in signals['1m'] and 'em_phase' in signals['1m']:
-                    ema_slow = signals['1m']['ema_slow']
-                    ema_fast = signals['1m']['ema_fast']
-                    ht_sine_percent_to_min = signals['1m']['ht_sine_percent_to_min']
-                    ht_sine_percent_to_max = signals['1m']['ht_sine_percent_to_max']
-                    em_amp = signals['1m']['em_amp']
-                    em_phase = signals['1m']['em_phase']
-                    close_price = last_candle
+            # Wait for 5sec
+            time.sleep(5)
 
-                    # Create new buy and sell conditions based on the EMA crossovers and threshold values
-                    if ema_fast > ema_slow and close_price < BUY_THRESHOLD and ht_sine_percent_to_min < ht_sine_percent_to_max and em_amp > 0.5 and em_phase[-1] < em_phase[-2]:
-                        print("Entry Long signal detected.")
-
-                    elif ema_fast < ema_slow and close_price > SELL_THRESHOLD and ht_sine_percent_to_max < ht_sine_percent_to_min and em_amp > 0.5 and em_phase[-1] > em_phase[-2]:
-                        print("Entry Short signal detected.")
-
+        except (BinanceAPIException, BinanceOrderException, BinanceRequestException) as e:
+            print("Error:", e)
+            time.sleep(5)
         except Exception as e:
-            print("Error in main loop:", e)
-
-        # Sleep for 5sec before checking again
-        time.sleep(5)
-
+            print("Unknown Error:", e)
+            time.sleep(5)
 
 # Run the main function
 if __name__ == '__main__':
