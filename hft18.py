@@ -541,6 +541,8 @@ def main():
     global TRADE_SYMBOL
     global EMA_SLOW_PERIOD
     global EMA_FAST_PERIOD
+    global BUY_THRESHOLD
+    global SELL_THRESHOLD
     global signals
 
     print("Starting main loop...")
@@ -583,8 +585,7 @@ def main():
                 close_prices = np.asarray(candles['1m']['close'])
                 ema_slow = talib.EMA(close_prices, timeperiod=EMA_SLOW_PERIOD)
                 ema_fast = talib.EMA(close_prices, timeperiod=EMA_FAST_PERIOD)
-                signals['1m']['ema_slow'] = ema_slow[-1]
-                signals['1m']['ema_fast'] = ema_fast[-1]
+                signals['1m'] = {'ema_slow': ema_slow[-1], 'ema_fast': ema_fast[-1]}
 
             # Calculate the HT_SINE for the 1m timeframe with a period of 30
             if '1m' in candles:
@@ -618,7 +619,7 @@ def main():
 
                 forecast_price = last_candle + em_field[int(em_period/60):int(15*60/em_period)].sum()
                 forecast_price_list = forecast_price.tolist()
-                forecast_price_float = forecast_price_list[0]
+                forecast_price_float = forecast_price
                 signals['1m']['forecast_price'] = forecast_price_list
 
                 # Determine the market mood and frequency of the current cycle spectrum
