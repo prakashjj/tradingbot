@@ -605,7 +605,6 @@ def main():
                 ht_sine_period = 30
                 ht_sine = talib.HT_SINE(close_prices)
                 ht_sine = np.asarray(ht_sine)
-                ht_sine = ht_sine.astype(int)
                 ht_sine = ht_sine[~np.isnan(ht_sine)]
                 if len(ht_sine) == 0:
                     continue
@@ -615,14 +614,14 @@ def main():
                 # Calculate the percent to min/max values for the HT_SINE
                 ht_sine_min = np.min(ht_sine)
                 ht_sine_max = np.max(ht_sine)
-                ht_sine_percent_to_min = (ht_sine[-1] - ht_sine_min) / (ht_sine_max - ht_sine_min)
-                ht_sine_percent_to_max = 1 - ht_sine_percent_to_min
-                signals['1m']['ht_sine_percent_to_min'] = ht_sine_percent_to_min
-                signals['1m']['ht_sine_percent_to_max'] = ht_sine_percent_to_max
+                ht_sine_normalized = (ht_sine - ht_sine_min) / (ht_sine_max - ht_sine_min)
+                ht_sine_scaled = ht_sine_normalized * (2 ** 31 - 1)
+                signals['1m']['ht_sine_percent_to_min'] = ht_sine_normalized[-1]
+                signals['1m']['ht_sine_percent_to_max'] = 1 - signals['1m']['ht_sine_percent_to_min']
 
                 # Calculate the EM field for the HT_SINE
-                freqs = np.linspace(0, 1/ht_sine_wave_length, len(ht_sine))
-                em_field = np.sum(np.sin(2*np.pi*freqs*ht_sine), axis=0)
+                freqs = np.linspace(0, 1/ht_sine_wave_length, len(ht_sine_scaled))
+                em_field = np.sum(np.sin(2*np.pi*freqs*ht_sine_scaled), axis=0)
                 em_field = np.atleast_1d(em_field)  # make sure em_field is a 1D array
                 signals['1m']['em_field'] = em_field.tolist()
 
