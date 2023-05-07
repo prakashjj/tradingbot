@@ -663,14 +663,16 @@ def main():
                 close_prices = np.asarray(candles['3m']['close'])
                 ema_slow = talib.EMA(close_prices, timeperiod=EMA_SLOW_PERIOD)[-1]
                 ema_fast = talib.EMA(close_prices, timeperiod=EMA_FAST_PERIOD)[-1]
+                em_field = signals['3m']['em_field']
+                em_amplitude = signals['3m']['em_amplitude']
                 signals['3m'] = {'ema_slow': float(ema_slow), 'ema_fast': float(ema_fast)}
                 if 'ema_slow' in signals['3m'] and 'ema_fast' in signals['3m']:
                     ema_slow = signals['3m']['ema_slow']
                     ema_fast = signals['3m']['ema_fast']
-                    if ema_fast < ema_slow and not trade_open:
+                    if ema_fast > ema_slow and em_field > 0 and em_amplitude > 0 and not trade_open:
                         signals['3m']['buy_signal'] = True
                         signals['3m']['sell_signal'] = False
-                    elif ema_fast > ema_slow and not trade_open:
+                    elif ema_fast < ema_slow and em_field < 0 and em_amplitude > 0 and not trade_open:
                         signals['3m']['buy_signal'] = False
                         signals['3m']['sell_signal'] = True
 
