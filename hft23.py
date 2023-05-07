@@ -647,10 +647,10 @@ def main():
 
             # Check for buy/sell signals
             if '1m' in signals:
-                if 'ht_sine_percent_to_min' in signals['1m'] and signals['1m']['ht_sine_percent_to_min'] < THRESHOLD and ht_sine_min < ht_sine_max:
+                if 'ht_sine_percent_to_min' in signals['1m'] and signals['1m']['ht_sine_percent_to_min'] < signals['1m']['ht_sine_percent_to_max'] and ht_sine_min < ht_sine_max:
                     print("Buy Signal Detected")
                     # Place buy order here
-                elif 'ht_sine_percent_to_max' in signals['1m'] and signals['1m']['ht_sine_percent_to_max'] < THRESHOLD and ht_sine_max < ht_sine_min:
+                elif 'ht_sine_percent_to_max' in signals['1m'] and signals['1m']['ht_sine_percent_to_max'] < signals['1m']['ht_sine_percent_to_min'] and ht_sine_max < ht_sine_min:
                     print("Sell Signal Detected")
                     # Place sell order here
 
