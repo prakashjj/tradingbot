@@ -481,7 +481,7 @@ def main():
                     percent_to_min_momentum = signals['1m']['momentum_percent_to_min']
                     percent_to_max_momentum = signals['1m']['momentum_percent_to_max']
                     mtf_average = signals['1m']['mtf_average']
-                    new_momentum_signal = signals['1m']['momentum_signal']
+                    momentum_signal = signals['1m']['momentum_signal']
 
                     # Check if the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price and the close price is closer to the percent to min threshold for a long trade and the new momentum signal is positive
                     if percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close'] and candles[-1]['close'] - percent_to_min_val < percent_to_max_val - candles[-1]['close'] and momentum_signal > 0:
