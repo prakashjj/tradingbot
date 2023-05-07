@@ -693,6 +693,7 @@ def main():
                 print(f"\t{signal}: {signals[tf][signal]}")
 
         time.sleep(5)
+
 # Run the main function
 if __name__ == '__main__':
     main()
