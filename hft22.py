@@ -484,11 +484,11 @@ def main():
                     momentum_signal = signals['1m']['momentum_signal']
 
                     # Check if the HT Sine Wave Percent to Min is less than 10 and less than the HT Sine Wave Percent to Max and the MTF average is above the close price and the close price is closer to the percent to min threshold for a long trade and the new momentum signal is positive
-                    if percent_to_min_val < 10 and percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close'] and candles[-1]['close'] - percent_to_min_val < percent_to_max_val - candles[-1]['close'] and momentum_signal > 0:
+                    if percent_to_min_val < percent_to_max_val and mtf_average > candles[-1]['close'] and candles[-1]['close'] - percent_to_min_val < percent_to_max_val - candles[-1]['close'] and momentum_signal > 0:
                         print("BUY signal")
 
                     # Check if the HT Sine Wave Percent to Min is greater than 90 and greater than the HT Sine Wave Wave Percent to Max and the MTF average is below the close price and the close price is closer to the percent to max threshold for a short trade and the new momentum signal is negative
-                    elif percent_to_max_val < 10 and percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close'] and percent_to_max_val - candles[-1]['close'] < candles[-1]['close'] - percent_to_min_val and momentum_signal < 0:
+                    elif percent_to_min_val > percent_to_max_val and mtf_average < candles[-1]['close'] and percent_to_max_val - candles[-1]['close'] < candles[-1]['close'] - percent_to_min_val and momentum_signal < 0:
                         print("SELL signal")
 
                     # Print the signal values for debugging purposes
