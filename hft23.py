@@ -542,24 +542,15 @@ print("Init main(): ")
 print()
 
 def main():
-    global TRADE_SYMBOL
-    global EMA_SLOW_PERIOD
-    global EMA_FAST_PERIOD
-    global THRESHOLD
-    global BUY_THRESHOLD
-    global SELL_THRESHOLD
-    global client
-    global signals
+    em_phase = None
 
     while True:
         print("Scanning...")
 
         try:
-            # Define start and end time for historical data
-            start_time = int(time.time()) - (1800 * 4)  # 60-minute interval (4 candles)
+            start_time = int(time.time()) - (1800 * 4)
             end_time = int(time.time())
 
-            # Define the candles and timeframes to use for the signals
             candles = {}
             for tf in ['1m', '3m', '5m']:
                 data = client.futures_historical_klines(
@@ -580,19 +571,16 @@ def main():
                         'volume': [float(candle[5]) for candle in data]
                     }
 
-            # Check if candles is empty
             if not candles:
                 print("Error: No historical candles found.")
                 continue
 
-            # Calculate the EMAs for the 1m timeframe
             if '1m' in candles:
                 close_prices = np.asarray(candles['1m']['close'])
                 ema_slow = talib.EMA(close_prices, timeperiod=EMA_SLOW_PERIOD)[-1]
                 ema_fast = talib.EMA(close_prices, timeperiod=EMA_FAST_PERIOD)[-1]
                 signals['1m'] = {'ema_slow': ema_slow, 'ema_fast': ema_fast}
 
-            # Calculate the HT_SINE for the 1m timeframe with a period of 30
             if '1m' in candles:
                 close_prices = np.asarray(candles['1m']['close'])
                 ht_sine_period = 30
@@ -604,7 +592,6 @@ def main():
                 ht_sine_wave_length = ht_sine_period * 60
                 signals['1m']['ht_sine'] = ht_sine.tolist()
 
-                # Calculate the percent to min/max values for the HT_SINE
                 ht_sine_min = np.min(ht_sine)
                 ht_sine_max = np.max(ht_sine)
                 ht_sine_normalized = (ht_sine - ht_sine_min) / (ht_sine_max - ht_sine_min)
@@ -612,51 +599,32 @@ def main():
                 signals['1m']['ht_sine_percent_to_min'] = ht_sine_normalized[-1]
                 signals['1m']['ht_sine_percent_to_max'] = 1 - signals['1m']['ht_sine_percent_to_min']
 
-                # Calculate the EM field for the HT_SINE
-                freqs = np.linspace(0, 1/ht_sine_wave_length, len(ht_sine_scaled))
-                em_field = np.sum(np.sin(2*np.pi*freqs*ht_sine_scaled), axis=0)
-                em_field = np.atleast_1d(em_field)  # make sure em_field is a 1D array
-                signals['1m']['em_field'] = em_field.tolist()
+                wave_lengths = np.arange(0.001, ht_sine_wave_length, 0.001)
+                frequencies = 1 / wave_lengths
+                freq_ranges = {
+                    'Delta': (0.5, 4),
+                    'Theta': (4, 8),
+                    'Alpha': (8, 13),
+                    'Beta': (13, 30),
+                    'Gamma': (30, np.inf)
+                }
+                degree_ranges = {}
+                quadrant = {}
+                for wave_type, freq_range in freq_ranges.items():
+                    idx = np.where(np.logical_and(freq_range[0] <= frequencies, frequencies < freq_range[1]))[0]
+                    if len(idx) > 0:
+                        degree_ranges[wave_type] = (idx[0]/len(frequencies)*360, idx[-1]/len(frequencies)*360)
+                        if em_phase is not None:  # Check if em_phase has been assigned a value before using it
+                            quadrant[wave_type] = 1 if np.mean(em_phase[idx]) >= 0 else -1
+                print("Degree Ranges and Quadrants of Wave Types:", degree_ranges, quadrant)
 
-                # Calculate the amplitude and phase of the EM field
-                em_fft = np.fft.fft(em_field)
-                if len(em_fft) > 0:
-                    em_amp = 2*np.abs(em_fft)/len(em_fft)
-                    em_phase = np.angle(em_fft)
-                    signals['1m']['em_amp'] = em_amp.tolist()
-                    signals['1m']['em_phase'] = em_phase.tolist()
-
-            # Print signals for debugging
-            print("ema_slow is at:", signals['1m']['ema_slow'])
-            print("ema_fast is at:", signals['1m']['ema_fast'])
-            print("ht_sine is at:", signals['1m']['ht_sine'][-1])
-            print("ht_sine_percent_to_min is at:", signals['1m']['ht_sine_percent_to_min'])
-            print("ht_sine_percent_to_max is at:", signals['1m']['ht_sine_percent_to_max'])
-            print("em_field is at:", signals['1m']['em_field'])
-            print("em_amp is at:", signals['1m']['em_amp'])
-            print("em_phase is at:", signals['1m']['em_phase'])
-
-            # Check for buy/sell signals
-            if '1m' in signals:
-                if 'ht_sine_percent_to_min' in signals['1m'] and signals['1m']['ht_sine_percent_to_min'] < signals['1m']['ht_sine_percent_to_max'] and signals['1m']['ht_sine_percent_to_min'] < THRESHOLD:
-                    print("Buy Signal Detected")
-                    # Place buy order here
-                elif 'ht_sine_percent_to_max' in signals['1m'] and signals['1m']['ht_sine_percent_to_max'] < signals['1m']['ht_sine_percent_to_min'] and signals['1m']['ht_sine_percent_to_max'] < THRESHOLD:
-                    print("Sell Signal Detected")
-                    # Place sell order here
-
-            # Wait for 5sec
-            time.sleep(5)
-
-            # Clear signals for the next iteration
-            signals = {}
-
-        except (BinanceAPIException, BinanceOrderException, BinanceRequestException) as e:
-            print("Error:", e)
-            time.sleep(5)
         except Exception as e:
-            print("Unknown Error:", e)
+            print(f"Error: {str(e)}")
             time.sleep(5)
+            continue
+
+        time.sleep(5)
+
 
 # Run the main function
 if __name__ == '__main__':
