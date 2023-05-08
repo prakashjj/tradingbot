@@ -537,30 +537,22 @@ def calculate_ema(candles, period):
         ema.append((price - ema[-1]) * multiplier + ema[-1])
     return ema
 
+print()
+print("Init main(): ")
+print()
+
 def main():
-    global closed_positions
     global TRADE_SYMBOL
-    global TRADE_TYPE
-    global TRADE_LVRG
-    global STOP_LOSS_THRESHOLD
-    global TAKE_PROFIT_THRESHOLD
-    global BUY_THRESHOLD
-    global SELL_THRESHOLD
     global EMA_SLOW_PERIOD
     global EMA_FAST_PERIOD
     global THRESHOLD
-    global trade_open
-    global trade_side
-    global trade_entry_pnl
-    global trade_entry_time
-    global trade_percentage
-    global signals
+    global BUY_THRESHOLD
+    global SELL_THRESHOLD
     global client
-
-    print("Starting main loop...")
+    global signals
 
     while True:
-        print("Looping...")
+        print("Scanning...")
 
         try:
             # Define start and end time for historical data
@@ -637,27 +629,26 @@ def main():
             # Print signals for debugging
             print("ema_slow is at:", signals['1m']['ema_slow'])
             print("ema_fast is at:", signals['1m']['ema_fast'])
-            print("ht_sine is at:", signals['1m']['ht_sine'])
+            print("ht_sine is at:", signals['1m']['ht_sine'][-1])
             print("ht_sine_percent_to_min is at:", signals['1m']['ht_sine_percent_to_min'])
             print("ht_sine_percent_to_max is at:", signals['1m']['ht_sine_percent_to_max'])
             print("em_field is at:", signals['1m']['em_field'])
             print("em_amp is at:", signals['1m']['em_amp'])
             print("em_phase is at:", signals['1m']['em_phase'])
-            print()
 
             # Check for buy/sell signals
             if '1m' in signals:
-                if 'ht_sine_percent_to_min' in signals['1m'] and signals['1m']['ht_sine_percent_to_min'] < signals['1m']['ht_sine_percent_to_max'] and ht_sine_min < ht_sine_max:
+                if 'ht_sine_percent_to_min' in signals['1m'] and signals['1m']['ht_sine_percent_to_min'] < signals['1m']['ht_sine_percent_to_max'] and signals['1m']['ht_sine_percent_to_min'] < THRESHOLD:
                     print("Buy Signal Detected")
                     # Place buy order here
-                elif 'ht_sine_percent_to_max' in signals['1m'] and signals['1m']['ht_sine_percent_to_max'] < signals['1m']['ht_sine_percent_to_min'] and ht_sine_max < ht_sine_min:
+                elif 'ht_sine_percent_to_max' in signals['1m'] and signals['1m']['ht_sine_percent_to_max'] < signals['1m']['ht_sine_percent_to_min'] and signals['1m']['ht_sine_percent_to_max'] < THRESHOLD:
                     print("Sell Signal Detected")
                     # Place sell order here
 
             # Wait for 5sec
             time.sleep(5)
 
-            # Add fresh new data for each iteration
+            # Clear signals for the next iteration
             signals = {}
 
         except (BinanceAPIException, BinanceOrderException, BinanceRequestException) as e:
