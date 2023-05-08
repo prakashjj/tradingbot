@@ -542,6 +542,7 @@ print("Init main(): ")
 print()
 
 def main():
+    signals = {}
     em_phase = None
 
     while True:
@@ -573,6 +574,7 @@ def main():
 
             if not candles:
                 print("Error: No historical candles found.")
+                time.sleep(5)
                 continue
 
             if '1m' in candles:
@@ -581,7 +583,6 @@ def main():
                 ema_fast = talib.EMA(close_prices, timeperiod=EMA_FAST_PERIOD)[-1]
                 signals['1m'] = {'ema_slow': ema_slow, 'ema_fast': ema_fast}
 
-            if '1m' in candles:
                 close_prices = np.asarray(candles['1m']['close'])
                 ht_sine_period = 30
                 ht_sine = talib.HT_SINE(close_prices)
@@ -614,17 +615,41 @@ def main():
                     idx = np.where(np.logical_and(freq_range[0] <= frequencies, frequencies < freq_range[1]))[0]
                     if len(idx) > 0:
                         degree_ranges[wave_type] = (idx[0]/len(frequencies)*360, idx[-1]/len(frequencies)*360)
-                        if em_phase is not None:  # Check if em_phase has been assigned a value before using it
+                        if em_phase is not None and len(em_phase) > 0:  # Check if em_phase has been assigned a value before using it
                             quadrant[wave_type] = 1 if np.mean(em_phase[idx]) >= 0 else -1
                 print("Degree Ranges and Quadrants of Wave Types:", degree_ranges, quadrant)
+                print("Frequencies:", frequencies[0:100:10])
+
+                close_prices = np.asarray(candles['1m']['close'])
+                ht_dc_period = talib.HT_DCPERIOD(close_prices)
+                if np.isnan(ht_dc_period).any():
+                    continue
+                em_field, em_amp, em_phase = ht_dc_period
+                signals['1m']['em_field'] = em_field.tolist()
+                signals['1m']['em_amp'] = em_amp.tolist()
+                signals['1m']['em_phase'] = em_phase.tolist()
+
+                # Get market cycles using OHLC data as the unit circle algorithm on the sine wave continuum stationary motion
+                ohlc = np.asarray([candles['1m']['open'], candles['1m']['high'], candles['1m']['low'], candles['1m']['close']])
+                unit_circle = np.exp(2j * np.pi * ohlc / ohlc.max(axis=0))
+                market_cycles = np.angle(unit_circle.mean(axis=0)) / (2 * np.pi)
+                signals['1m']['market_cycles'] = market_cycles.tolist()
+
+                # Print signals for debugging
+                print("ema_slow is at:", signals['1m']['ema_slow'])
+                print("ema_fast is at:", signals['1m']['ema_fast'])
+                print("ht_sine is at:", signals['1m']['ht_sine'])
+                print("ht_sine_percent_to_min is at:", signals['1m']['ht_sine_percent_to_min'])
+                print("ht_sine_percent_to_max is at:", signals['1m']['ht_sine_percent_to_max'])
+                print("em_field is at:", signals['1m']['em_field'])
+                print("em_amp is at:", signals['1m']['em_amp'])
+                print("em_phase is at:", signals['1m']['em_phase'])
+                print("market_cycles is at:", signals['1m']['market_cycles'])
 
         except Exception as e:
-            print(f"Error: {str(e)}")
-            time.sleep(5)
-            continue
+            print(e)
 
         time.sleep(5)
-
 
 # Run the main function
 if __name__ == '__main__':
